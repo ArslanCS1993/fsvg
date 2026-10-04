@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- FSVG program 2: the round trip.
+
+     A program that prints ITS OWN source flowchart. The compiler embeds this
+     file with .incbin, so the output is byte-identical to the input - which
+     means the language can describe itself, and the compiler and the runtime
+     are demonstrably not in the way.
+
+        ./02-self  >  self.svg        # self.svg == this file -->
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="300"
+     data-const="STATUS=0">
+
+  <g>
+    <rect id="start" x="60" y="60" width="300" height="46"
+          data-entry="1" data-next="bye">PRINT SOURCE</rect>
+
+    <rect id="bye" x="60" y="150" width="300" height="46"
+          data-next="bye">EXIT STATUS</rect>
+  </g>
+</svg>

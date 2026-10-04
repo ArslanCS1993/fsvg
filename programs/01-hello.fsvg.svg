@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- FSVG program 1 - the first thing that boots.
+
+     It walks a sine table with an index, scales the result into screen
+     coordinates, and writes a real SVG document to stdout.
+
+        ./01-hello > out.svg
+
+     Every number in this program is either a SIZE or a MEMORY ADDRESS. Every
+     other value is a register or a named constant - there is not one magic
+     number in the body. The sine table is 32 bytes read by index, which is
+     what makes it a table and not a literal. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="520"
+     data-const="POINTS=160,SCALE=5,MID=240,TABLE_MASK=31,ZERO=0,ONE=1,STATUS=0"
+     data-bytes="SINE=0,18,34,50,64,75,83,88,90,88,83,75,
+                 64,50,34,18,0,-18,-34,-50,-64,-75,-83,-88,
+                 -90,-88,-83,-75,-64,-50,-34,-18"
+     data-str="HEAD=&lt;?xml version='1.0' encoding='UTF-8'?&gt;&lt;svg xmlns='http://www.w3.org/2000/svg' width='900' height='520'&gt;&lt;rect width='900' height='520' fill='#0d1117'/&gt;&lt;path fill='none' stroke='#7ee787' stroke-width='3' d='M30,240;TAIL='/&gt;&lt;/svg&gt;;COMMA=,;LE=L">
+
+  <g>
+    <rect id="start" x="40" y="30" width="230" height="38"
+          data-entry="1" data-next="init_i">PRINT HEAD</rect>
+
+    <!-- i = 0 -->
+    <rect id="init_i" x="40" y="100" width="230" height="38"
+          data-next="loop">MOV RCX, ZERO</rect>
+
+    <!-- ================= the loop: one decision, three exits ================= -->
+    <polygon id="loop" points="200,190 280,226 200,262 120,226"
+             data-lt="body" data-eq="done" data-gt="done">CMP RCX, POINTS</polygon>
+
+    <!-- idx = i &amp; 31  ->  wraps the sine table without a division -->
+    <rect id="body" x="360" y="204" width="240" height="38"
+          data-next="mask">MOV RSI, RCX</rect>
+    <rect id="mask" x="360" y="266" width="240" height="38"
+          data-next="load">AND RSI, TABLE_MASK</rect>
+    <rect id="load" x="360" y="328" width="240" height="38"
+          data-next="scale">LOAD.SB RDX, @SINE[RSI]</rect>
+
+    <!-- x = i * 5 + 30 -->
+    <rect id="scale" x="360" y="390" width="240" height="38"
+          data-next="mul">MOV RAX, RCX</rect>
+    <rect id="mul" x="360" y="452" width="240" height="38"
+          data-next="add_x">MUL RAX, SCALE</rect>
+    <rect id="add_x" x="360" y="514" width="240" height="38"
+          data-next="y_mid">ADD RAX, SCALE</rect>
+
+    <!-- y = 240 - table[i]   -> the wave crosses the middle of the screen -->
+    <rect id="y_mid" x="360" y="576" width="240" height="38"
+          data-next="y_sub">MOV RBX, MID</rect>
+    <rect id="y_sub" x="360" y="638" width="240" height="38"
+          data-next="put_le">SUB RBX, RDX</rect>
+
+    <!-- One path segment per point:  L x , y
+         Emitting "L" before each point is what removes the need for a
+         separator BETWEEN points. Printing the comma between x and y alone
+         produced "5,240" + "10,214" = "5,24010,214", and a separator after y
+         alone produced "5240" - the SVG path is only unambiguous if each
+         point carries its own command letter. -->
+    <rect id="put_le" x="700" y="452" width="200" height="38"
+          data-next="put_x">PRINT LE</rect>
+    <rect id="put_x" x="700" y="514" width="200" height="38"
+          data-next="put_comma">PUTINT RAX</rect>
+    <rect id="put_comma" x="700" y="576" width="200" height="38"
+          data-next="put_y">PRINT COMMA</rect>
+    <rect id="put_y" x="700" y="638" width="200" height="38"
+          data-next="inc">PUTINT RBX</rect>
+
+    <!-- i = i + 1, and the edge that closes the loop -->
+    <rect id="inc" x="360" y="700" width="240" height="38"
+          data-next="loop">ADD RCX, ONE</rect>
+
+    <rect id="done" x="40" y="330" width="230" height="38"
+          data-next="bye">PRINT TAIL</rect>
+    <rect id="bye" x="40" y="392" width="230" height="38"
+          data-next="bye">EXIT STATUS</rect>
+  </g>
+</svg>
