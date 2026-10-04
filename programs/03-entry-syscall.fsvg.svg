@@ -1,0 +1,156 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  entry_SYSCALL_64, in FSVG, with no letters in the program.
+
+  Every instruction is one emoji; every register is one emoji. The only letters
+  below are in the XML's own attribute names and in the shape ids that make the
+  edges point somewhere. Meaning comes from icons.py, never from the drawing.
+
+  Box for box this is the code the CPU ran, in the order it ran it. The two
+  numbers that appear are the language's one concession, because a memory
+  address IS a number: the per-CPU addresses in the trace.
+
+  Compiled with the use-r11 flag: the SYSCALL instruction leaves RFLAGS in R11, so the
+  CPU chose that register and the program gets to own it.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 2350" data-name="entry_SYSCALL_64">
+
+  <!-- swapgs : the very first instruction of the kernel on a syscall -->
+  <rect id="b01" x="60" y="30" width="300" height="46" rx="6" data-entry="1" data-next="b02">
+    <text class="g" x="210" y="60">🔄</text>
+  </rect>
+
+  <!-- mov %rsp, TSS_sp2 : park the user stack pointer in per-CPU scratch -->
+  <rect id="b02" x="60" y="96" width="300" height="46" rx="6" data-next="b03">
+    <text class="g" x="210" y="126">🛡 🧱 @0xffffffff8160c014</text>
+  </rect>
+
+  <!-- mov pcpu_hot+X86_top_of_stack, %rsp : switch to the kernel stack -->
+  <rect id="b03" x="60" y="162" width="300" height="46" rx="6" data-next="b04">
+    <text class="g" x="210" y="192">🛡 🧱 @0xffffffff816ba710</text>
+  </rect>
+
+  <!-- build struct pt_regs on the kernel stack: ss, sp, flags, cs, ip, orig_ax -->
+  <rect id="b04" x="60" y="228" width="300" height="46" rx="6" data-next="b05">
+    <text class="g" x="210" y="258">📥 43</text>
+  </rect>
+
+  <rect id="b05" x="60" y="294" width="300" height="46" rx="6" data-next="b06">
+    <text class="g" x="210" y="324">📥 @0xffffffff8160c014</text>
+  </rect>
+
+  <rect id="b06" x="60" y="360" width="300" height="46" rx="6" data-next="b07">
+    <text class="g" x="210" y="390">📥 🟧</text>
+  </rect>
+
+  <rect id="b07" x="60" y="426" width="300" height="46" rx="6" data-next="b08">
+    <text class="g" x="210" y="456">📥 51</text>
+  </rect>
+
+  <rect id="b08" x="60" y="492" width="300" height="46" rx="6" data-next="b09">
+    <text class="g" x="210" y="522">📥 🔷</text>
+  </rect>
+
+  <rect id="b09" x="60" y="558" width="300" height="46" rx="6" data-next="b10">
+    <text class="g" x="210" y="588">📥 🔺</text>
+  </rect>
+
+  <!-- PUSH_AND_CLEAR_REGS: one line of the kernel, twenty instructions.
+       Every pushed register is zeroed immediately after it is saved. -->
+  <!-- PUSH_AND_CLEAR_REGS, the kernel's own macro: fifteen pushes,
+       then fifteen clears. The order is not a detail — a frame built in
+       the wrong order is a frame the kernel cannot unwind. This box is a
+       block: one source line, twenty-eight instructions. -->
+  <rect id="b10" x="60" y="624" width="330" height="754" rx="6" data-next="b11">
+    <text class="g" x="225" y="656">📥 🔑</text>
+    <text class="g" x="225" y="682">📥 ⭐</text>
+    <text class="g" x="225" y="708">📥 🔵</text>
+    <text class="g" x="225" y="734">📥 🔷</text>
+    <text class="g" x="225" y="760">📥 0xffffffffffffffda</text>
+    <text class="g" x="225" y="786">📥 🟨</text>
+    <text class="g" x="225" y="812">📥 🟢</text>
+    <text class="g" x="225" y="838">📥 🟡</text>
+    <text class="g" x="225" y="864">📥 🟧</text>
+    <text class="g" x="225" y="890">📥 🔶</text>
+    <text class="g" x="225" y="916">📥 🔒</text>
+    <text class="g" x="225" y="942">📥 🟠</text>
+    <text class="g" x="225" y="1392">📥 🟫</text>
+    <text class="g" x="225" y="1418">📥 ▣</text>
+    <text class="g" x="225" y="1444">📥 ◈</text>
+    <text class="g" x="225" y="1470">🗑 ⭐ ⭐</text>
+    <text class="g" x="225" y="1496">🗑 🔵 🔵</text>
+    <text class="g" x="225" y="1522">🗑 🔷 🔷</text>
+    <text class="g" x="225" y="1548">🗑 🟨 🟨</text>
+    <text class="g" x="225" y="1574">🗑 🟢 🟢</text>
+    <text class="g" x="225" y="1600">🗑 🟡 🟡</text>
+    <text class="g" x="225" y="1626">🗑 🟧 🟧</text>
+    <text class="g" x="225" y="1652">🗑 🔶 🔶</text>
+    <text class="g" x="225" y="1678">🗑 🔒 🔒</text>
+    <text class="g" x="225" y="1704">🗑 🟠 🟠</text>
+    <text class="g" x="225" y="1730">🗑 🟫 🟫</text>
+    <text class="g" x="225" y="1756">🗑 ▣ ▣</text>
+    <text class="g" x="225" y="1782">🗑 ◈ ◈</text>
+  </rect>
+
+  <!-- mov %rsp,%rdi ; movslq %eax,%rsi : the syscall number as an argument -->
+  <rect id="b11" x="60" y="1424" width="330" height="46" rx="6" data-next="b12">
+    <text class="g" x="225" y="1454">🛡 🔑 🧱</text>
+  </rect>
+
+  <rect id="b12" x="60" y="1490" width="330" height="46" rx="6" data-next="b13">
+    <text class="g" x="225" y="1520">🛡 ⭐ 🔺</text>
+  </rect>
+
+  <!-- IBRS_ENTER / UNTRAIN_RET / CLEAR_BRANCH_HISTORY: no architectural effect
+       on the traced path, so they collapse to one box here. -->
+  <rect id="b13" x="60" y="1556" width="330" height="46" rx="6" data-next="b14">
+    <text class="g" x="225" y="1586">🛐</text>
+  </rect>
+
+  <!-- call do_syscall_64 : the kernel proper starts here.
+       A call names a shape, exactly as the edges do — so the operand is a
+       shape id, the same plumbing the flow already uses, not a lettered
+       symbol in the program. -->
+  <rect id="b14" x="60" y="1622" width="330" height="46" rx="6" data-next="b15">
+    <text class="g" x="225" y="1652">📞 @b15</text>
+  </rect>
+
+  <!-- the callee: everything do_syscall_64 does -->
+  <rect id="b15" x="60" y="1688" width="330" height="70" rx="6" data-next="b16">
+    <text class="g" x="225" y="1718">🤖 🔷 🔷</text>
+  </rect>
+
+  <!-- The decision: can we return with SYSRET, or must we take the slow path?
+       This is the Xen PV alternative in the kernel. -->
+  <polygon id="b16" points="225,1814 390,1864 225,1914 60,1864"
+           data-lt="b18" data-eq="b17" data-gt="b18">
+    <text class="g" x="225" y="1872">🤖 🔷 🔷</text>
+  </polygon>
+
+  <!-- the winning path: pop the registers back and return to userspace -->
+  <rect id="b17" x="450" y="1841" width="300" height="46" rx="6" data-next="b21">
+    <text class="g" x="600" y="1871">📤 ◈</text>
+  </rect>
+
+  <!-- the slow path: swapgs back, restore the stack, iretq -->
+  <rect id="b18" x="60" y="1974" width="330" height="46" rx="6" data-next="b19">
+    <text class="g" x="225" y="2004">🔄</text>
+  </rect>
+
+  <rect id="b19" x="60" y="2040" width="330" height="46" rx="6" data-next="b20">
+    <text class="g" x="225" y="2070">📤 🧱</text>
+  </rect>
+
+  <rect id="b20" x="60" y="2106" width="330" height="46" rx="6" data-next="b21">
+    <text class="g" x="225" y="2136">🛑</text>
+  </rect>
+
+  <!-- both paths rejoin here: we are back in userspace -->
+  <rect id="b21" x="255" y="2214" width="300" height="46" rx="6" data-next="b22">
+    <text class="g" x="405" y="2244">🚀</text>
+  </rect>
+
+  <rect id="b22" x="255" y="2280" width="300" height="46" rx="6" data-next="b22">
+    <text class="g" x="405" y="2310">🚪</text>
+  </rect>
+</svg>

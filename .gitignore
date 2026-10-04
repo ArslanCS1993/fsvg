@@ -16,3 +16,6 @@ dist/
 # scratch
 trace.txt
 err.txt
+# three-pane viewer lives in the fsvg-linux repo
+/entry.html
+/three-pane.py

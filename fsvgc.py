@@ -23,12 +23,35 @@ import sys
 import tempfile
 import xml.etree.ElementTree as ET
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import icons  # the glyph vocabulary: no letters live in a program
+
 SVG = "{http://www.w3.org/2000/svg}"
-# R11 is deliberately absent: it is compiler scratch. Indexed addressing needs
-# it (x86 forbids RIP-relative WITH an index register), and a language that
-# hands every GPR to the user has nowhere else to put a base address.
+# R11 is compiler scratch for ordinary programs: indexed addressing needs it
+# (x86 forbids RIP-relative WITH an index register), and a language that hands
+# every GPR to the user has nowhere else to put a base address.
+#
+# Kernel code is the exception, and it is a real one. `entry_SYSCALL_64` pushes
+# R11 because the SYSCALL instruction put RFLAGS there -- the CPU chose that
+# register, not us. So R11 is available on request via --use-r11, and the shapes
+# that need a scratch register then borrow RDI instead. A program that both
+# passes --use-r11 and keeps a live value in RDI is told so rather than
+# silently miscompiled.
+SCRATCH = "r11"
+USE_R11 = False   # set by --use-r11 for kernel code that owns the register
+
+
+def scratch():
+    """The register the compiler borrows for immediates and absolute addresses.
+
+    R11 by default. When the program owns R11 (kernel entry paths), RDI is
+    borrowed instead so a program may keep a live value in R11.
+    """
+    return "rdi" if USE_R11 else "r11"
 REGS = ["RAX", "RBX", "RCX", "RDX", "RSI", "RDI", "RBP", "RSP"] + \
-       ["R%d" % i for i in range(8, 16) if i != 11]
+       [f"R{i}" for i in range(8, 16) if i != 11]
+RESERVED = {"R11"}          # yielded when --use-r11 is given
+ALT_SCRATCH = "RDI"         # what the compiler borrows instead
 
 # ops whose operand is a SIZE, where a bare integer is therefore legal
 SIZE_SLOTS = {"FILL": 2, "SHL": 1, "SHR": 1, "EXIT": 0}
@@ -36,7 +59,12 @@ ARITY = {"MOV": 2, "ADD": 2, "SUB": 2, "AND": 2, "OR": 2, "XOR": 2,
          "MUL": 2, "DIV": 2,
          "SHL": 2, "SHR": 2, "FILL": 3, "PRINT": 1, "PUTINT": 1, "EXIT": 1,
          "LOAD.B": 2, "LOAD.SB": 2, "LOAD.W": 2, "LOAD.D": 2, "LOAD.Q": 2,
-         "STORE.B": 2, "STORE.W": 2, "STORE.D": 2, "STORE.Q": 2}
+         "STORE.B": 2, "STORE.W": 2, "STORE.D": 2, "STORE.Q": 2,
+         # kernel-facing ops. These assemble and link like any other, but a
+         # privileged one (SWAPGS) faults in ring 3 -- that is a property of
+         # the CPU, not of the compiler.
+         "PUSH": 1, "POP": 1, "SWAPGS": 0, "SYSRET": 0, "IRET": 0,
+         "CALL": 1, "CMP": 2, "NOP": 0, "TO_USER": 0}
 
 # ops whose FIRST operand is a destination register (STORE/FILL take memory
 # first, PRINT/PUTINT/EXIT take a name or a value)
@@ -139,11 +167,14 @@ digbuf:	.skip 24
 # ----------------------------------------------------------------- the program
 
 class Shape:
-    __slots__ = ("id", "kind", "text", "a", "fn", "op")
+    __slots__ = ("id", "kind", "text", "a", "fn", "op", "el", "block")
 
-    def __init__(self, sid, kind, text, attrs, fn):
+    def __init__(self, sid, kind, text, attrs, fn, el=None):
         self.id, self.kind, self.text, self.a, self.fn = sid, kind, text, attrs, fn
         self.op = None
+        # kept so the glyph reader can walk a shape's nested icon/text nodes
+        self.el = el
+        self.block = None   # set when this shape is a block of glyph statements
 
     def successors(self):
         a = self.a
@@ -249,7 +280,7 @@ def load(path):
         if kind == "test" and len([p for p in pts.replace(",", " ").split() if p]) != 8:
             raise CompileError("%s: a test must be a rhombus - 4 points "
                                "(got %d numbers in points)" % (sid, len(pts.split())))
-        shapes[sid] = Shape(sid, kind, shape_text(el), dict(el.attrib), fn_of(el))
+        shapes[sid] = Shape(sid, kind, shape_text(el), dict(el.attrib), fn_of(el), el)
         order.append(sid)
 
     entry = [s for s in order if shapes[s].a.get("data-entry") == "1"]
@@ -294,7 +325,7 @@ def reg_of(t, sid):
     return t.lower()
 
 
-def value_of(t, consts, sid, addr_ok=False):
+def value_of(t, consts, sid, addr_ok=False, allow_bare=False):
     """Return ('reg', name) or ('imm', int) for a plain value operand."""
     if t.upper() in REGS:
         return ("reg", t.lower())
@@ -303,17 +334,26 @@ def value_of(t, consts, sid, addr_ok=False):
     if addr_ok and t.lower().startswith("0x"):
         return ("imm", int(t, 16))
     if is_int(t):
+        if allow_bare:
+            return ("imm", int(t, 10))
         raise CompileError("%s: bare number %r - give it a name in data-const"
                            % (sid, t))
     raise CompileError("%s: %r is not a register, a data-const, or a 0x address"
                        % (sid, t))
 
 
+def shapes_of(s, env):
+    """Every shape id in the program, for validating CALL targets."""
+    return env.shape_ids
+
+
 class Env:
     """The program's symbol tables: named constants, buffers, byte tables."""
 
-    def __init__(self, consts, bss, bytes_):
+    def __init__(self, consts, bss, bytes_, shape_ids=()):
         self.consts, self.bss, self.bytes = consts, bss, bytes_
+        # shape ids, so CALL can check its target names a real shape
+        self.shape_ids = set(shape_ids)
 
 
 def mem_of(t, env, sid):
@@ -379,75 +419,182 @@ def emit_imm_to(dst, val, out):
     if -(1 << 31) <= val < (1 << 31):
         out.append("\tmovq\t$%d, %s" % (val, dst))
     else:
-        out.append("\tmovabs\t$0x%x, %%r11" % val)
-        out.append("\tmovq\t%%r11, %s" % dst)
+        out.append("\tmovabs\t$0x%x, %%%s" % (val, scratch()))
+        out.append("\tmovq\t%%%s, %s" % (scratch(), dst))
 
 
 # ------------------------------------------------------------------- emission
 
-def compile_shape(s, env, strs, out):
+def parse_glyphs(s):
+    """Read a shape's code as glyphs instead of text.
+
+    A program need not contain letters. Each shape may hold emoji; the leading
+    glyph is the instruction, the rest are its operands. Meaning comes from
+    icons.py -- a dictionary -- never from how the drawing looks, so a glyph is
+    never guessed at.
+
+    Only glyphs are translated here. Anything that is not a glyph is passed
+    through untouched, so memory refs (@0x...), sizes and named constants reach
+    the ordinary operand checks and keep every rule they had before.
+
+    Returns (opname, [operands]) or None if this shape is not in glyph form.
+    """
+    toks = []
+    for node in [s.el] + list(s.el.iter()):
+        for t in (node.text, node.tail):
+            if t:
+                toks += t.split()
+    if not toks:
+        return None
+
+    opname = icons.op_for(toks[0])
+    if opname is None:
+        return None                     # not glyph form: fall back to text
+
+    args = []
+    for t in toks[1:]:
+        r = icons.reg_for(t)
+        args.append(r if r else t)      # non-glyph operand: leave it alone
+    return opname, args
+
+
+def glyph_lines(s):
+    """A shape's glyph statements, one per line of text.
+
+    One shape is normally one statement. But the kernel's own macros are many
+    instructions written as one source line -- PUSH_AND_CLEAR_REGS is 28 of them
+    -- so a glyph shape may hold a *block*, one statement per line. Control flow
+    is unchanged: the block still has one successor, exactly as a basic block
+    does. Forcing those 28 into 28 boxes would make the drawing lie about the
+    source it came from.
+
+    Returns a list of (opname, args), or None if this shape is not glyph form.
+    """
+    stmts = []
+    for node in ([s.el] if s.el is not None else []) + list(s.el.iter() if s.el is not None else []):
+        for chunk in (node.text, node.tail):
+            if not chunk:
+                continue
+            for raw in chunk.splitlines():
+                toks = raw.split()
+                if not toks:
+                    continue
+                op = icons.op_for(toks[0])
+                if op is None:
+                    return None         # not glyph form after all
+                args = []
+                for t in toks[1:]:
+                    r = icons.reg_for(t)
+                    args.append(r if r else t)
+                stmts.append((op, args))
+    return stmts or None
+
+
+def compile_shape(s, env, strs, out, stmt=None, label=None):
     consts = env.consts
     txt = s.text
-    if not txt:
-        raise CompileError("%s: empty <%s> - every shape needs code"
-                           % (s.id, "polygon" if s.kind == "test" else "rect"))
-    head, _, rest = txt.partition(" ")
-    op = head.upper()
-    args = [a.strip() for a in rest.split(",") if a.strip()]
+    # When a shape is a block, `label` names the individual statement so an
+    # error points at the exact line inside the box.
+    sid = label or s.id
+
+    # A glyph shape may be a block of statements, one per line. A rhombus is a
+    # decision, so it must stay exactly one CMP.
+    block = glyph_lines(s)
+    if block is not None and s.kind == "test":
+        if len(block) != 1 or block[0][0] != "cmp":
+            raise CompileError(
+                "%s: a <polygon> is one decision, so it must hold exactly one "
+                "CMP - this glyph shape holds %d statement(s)"
+                % (sid, len(block)))
+    if block is not None and len(block) > 1:
+        # One shape, many statements. Emit them in order through the same
+        # single-statement path, so every check below applies unchanged. The id
+        # is suffixed so an error still names the box and the line inside it.
+        for i, (bop, bargs) in enumerate(block):
+            sub = Shape(sid, "stmt", "", s.a, s.fn, None)
+            compile_shape(sub, env, strs, out, stmt=(bop, bargs),
+                          label="%s#%d" % (sid, i + 1))
+        return
+
+    g = stmt if stmt is not None else parse_glyphs(s)
+    if g is not None:
+        opname, args = g
+        op = opname.upper()
+        spec = icons.OPS[opname]
+        if len(args) != spec['arity']:
+            raise CompileError("%s: %s takes %d operand(s), the glyph form has %d"
+                               % (sid, op, spec['arity'], len(args)))
+    else:
+        if not txt:
+            raise CompileError("%s: empty <%s> - every shape needs code"
+                               % (sid, "polygon" if s.kind == "test" else "rect"))
+        head, _, rest = txt.partition(" ")
+        op = head.upper()
+        args = [a.strip() for a in rest.split(",") if a.strip()]
+    # glyph form relaxes the named-constant rule (a name is a letter)
+    bare = g is not None
 
     if s.kind == "test":
         if op != "CMP":
             raise CompileError("%s: a <polygon> is a decision, so it must hold "
-                               "CMP - got %r" % (s.id, head))
+                               "CMP - got %r" % (sid, head))
         if len(args) != 2:
-            raise CompileError("%s: CMP takes 2 operands, got %d" % (s.id, len(args)))
+            raise CompileError("%s: CMP takes 2 operands, got %d" % (sid, len(args)))
         for a in args:
-            check_number(a, None, s.id, "CMP")
-        ka, va = value_of(args[0], consts, s.id)
-        kb, vb = value_of(args[1], consts, s.id, addr_ok=True)
+            check_number(a, None, sid, "CMP")
+        ka, va = value_of(args[0], consts, sid)
+        kb, vb = value_of(args[1], consts, sid, addr_ok=True, allow_bare=bare)
         if ka == "reg" and kb == "reg":
             out.append("\tcmpq\t%%%s, %%%s" % (vb, va))
         elif ka == "reg":
-            emit_imm_to("%r11", vb, out)
-            out.append("\tcmpq\t%%r11, %%%s" % va)
+            emit_imm_to("%" + scratch(), vb, out)
+            out.append("\tcmpq\t%%%s, %%%s" % (scratch(), va))
         elif kb == "reg":
-            out.append("\tmovq\t%%%s, %%r11" % va)
-            out.append("\tcmpq\t%%%s, %%r11" % vb)
+            out.append("\tmovq\t%%%s, %%%s" % (va, scratch()))
+            out.append("\tcmpq\t%%%s, %%%s" % (vb, scratch()))
         else:
-            out.append("\tcmpq\t$0x%x, %%r11" % va)
-            out.append("\ttestq\t%%r11, %%r11")
+            out.append("\tcmpq\t$0x%x, %%%s" % (va, scratch()))
+            out.append("\ttestq\t%%%s, %%%s" % (scratch(), scratch()))
         # Three named exits. Each conditional jump goes to a local label that
         # then jumps on to the target shape, so "data-lt=foo" appears in the
         # assembly as .Lid_lt -> .Lfoo and the decision is readable in objdump.
-        out += ["\t%s\t.L%s_%s" % (j, s.id, k) for j, k in
+        out += ["\t%s\t.L%s_%s" % (j, sid, k) for j, k in
                 (("jl", "lt"), ("je", "eq"), ("jg", "gt"))]
         for k in ("lt", "eq", "gt"):
             tgt = s.a.get("data-" + k)
-            out.append(".L%s_%s:" % (s.id, k))
+            out.append(".L%s_%s:" % (sid, k))
             if tgt:
                 out.append("\tjmp\t.L%s" % tgt)
         s.op = "CMP"
         return
 
     if op not in ARITY:
-        raise CompileError("%s: unknown statement %r" % (s.id, head))
+        raise CompileError("%s: unknown statement %r" % (sid, head))
     if len(args) != ARITY[op]:
         raise CompileError("%s: %s takes %d operand(s), got %d - %r"
-                           % (s.id, op, ARITY[op], len(args), txt))
+                           % (sid, op, ARITY[op], len(args), txt))
     for i, a in enumerate(args):
-        check_number(a, i if SIZE_SLOTS.get(op) == i else None, s.id, op)
+        if g is not None and is_int(a):
+            # The letter-free form has a genuine trade-off. The number rule says
+            # a literal is only an address or a size, so an immediate like
+            # `push $0x2b` should be named -- but a name is a letter, and this
+            # form exists precisely to have none. So a glyph-form operand may be
+            # a bare immediate. It is still checked to be a well-formed integer;
+            # only the naming requirement is relaxed, and only here.
+            continue
+        check_number(a, i if SIZE_SLOTS.get(op) == i else None, sid, op)
     # Only these ops take a destination REGISTER first. STORE and FILL take a
     # memory reference first, and PRINT/PUTINT/EXIT take a name or a value, so
     # calling reg_of(args[0]) unconditionally rejected every one of them.
-    d = reg_of(args[0], s.id) if op in REGDST else None
+    d = reg_of(args[0], sid) if op in REGDST else None
 
     if op in ("MOV", "ADD", "SUB", "AND", "OR", "XOR"):
         src = args[1]
         if src.startswith("@"):
-            mem = mem_operand(src, env, s.id)
+            mem = mem_operand(src, env, sid)
             out.append("\tmovq\t%s, %%%s" % (mem, d))
         else:
-            kind, val = value_of(src, consts, s.id, addr_ok=True)
+            kind, val = value_of(src, consts, sid, addr_ok=True, allow_bare=bare)
             mn = {"MOV": "movq", "ADD": "addq", "SUB": "subq",
                   "AND": "andq", "OR": "orq", "XOR": "xorq"}[op]
             if kind == "reg":
@@ -455,28 +602,28 @@ def compile_shape(s, env, strs, out):
             elif -(1 << 31) <= val < (1 << 31):
                 out.append("\t%s\t$0x%x, %%%s" % (mn, val, d))
             else:
-                out.append("\tmovabs\t$0x%x, %%r11" % val)
-                out.append("\t%s\t%%r11, %%%s" % (mn, d))
+                out.append("\tmovabs\t$0x%x, %%%s" % (val, scratch()))
+                out.append("\t%s\t%%%s, %%%s" % (mn, scratch(), d))
     elif op in ("MUL", "DIV"):
         # x86 has no dst = dst OP src in one instruction for MUL/DIV, so the
         # destination goes through RAX. RDX is spared by using R11 as scratch
         # for an immediate, and a division by zero is left to fault loudly.
-        kind, val = value_of(args[1], consts, s.id, addr_ok=True)
+        kind, val = value_of(args[1], consts, sid, addr_ok=True, allow_bare=bare)
         out.append("\tmovq\t%%%s, %%rax" % d)
         if kind == "reg":
             out.append("\timulq\t%%%s, %%rax" % val)
         elif -(1 << 31) <= val < (1 << 31):
             out.append("\timulq\t$0x%x, %%rax, %%rax" % val)
         else:
-            out.append("\tmovabs\t$0x%x, %%r11" % val)
-            out.append("\timulq\t%%r11, %%rax")
+            out.append("\tmovabs\t$0x%x, %%%s" % (val, scratch()))
+            out.append("\timulq\t%%%s, %%rax" % scratch())
         if op == "DIV":
             if kind == "reg":
-                out.append("\tmovq\t%%%s, %%r11" % val)
+                out.append("\tmovq\t%%%s, %%%s" % (val, scratch()))
             else:
-                out.append("\tmovabs\t$0x%x, %%r11" % val)
+                out.append("\tmovabs\t$0x%x, %%%s" % (val, scratch()))
             out.append("\tmovq\t$0, %%edx")
-            out.append("\tdivq\t%%r11")
+            out.append("\tdivq\t%%%s" % scratch())
         out.append("\tmovq\t%%rax, %%%s" % d)
     elif op in ("SHL", "SHR"):
         out.append("\t%s\t$%s, %%%s" % ("shlq" if op == "SHL" else "shrq",
@@ -486,27 +633,27 @@ def compile_shape(s, env, strs, out):
         # with .B would come out 230 instead of -26.
         w = {"B": "movzbq", "SB": "movsbq", "W": "movzwq",
              "D": "movl", "Q": "movq"}[op.split(".")[1]]
-        base, idx = mem_base_index(args[1], env, s.id)
+        base, idx = mem_base_index(args[1], env, sid)
         if idx is None:
             out.append("\t%s\t%s, %%%s" % (w, base, d))
         else:
             # leaq the table into scratch first: NAME(%rip,%reg,scale) is not a
             # legal x86 address, because RIP cannot be a base with an index.
-            out.append("\tleaq\t%s(%%rip), %%r11" % base)
-            out.append("\t%s\t(%%r11,%%%s,%d), %%%s" % (w, idx, scale_of(args[1]), d))
+            out.append("\tleaq\t%s(%%rip), %%%s" % (base, scratch()))
+            out.append("\t%s\t(%%%s,%%%s,%d), %%%s" % (w, scratch(), idx, scale_of(args[1]), d))
     elif op.startswith("STORE."):
         w = {"B": "movb", "W": "movw", "D": "movl", "Q": "movq"}[op[-1]]
-        base, idx = mem_base_index(args[0], env, s.id)
-        src_reg = reg_of(args[1], s.id)
+        base, idx = mem_base_index(args[0], env, sid)
+        src_reg = reg_of(args[1], sid)
         if idx is None:
             out.append("\t%s\t%%%s, %s" % (w, src_reg, base))
         else:
-            out.append("\tleaq\t%s(%%rip), %%r11" % base)
-            out.append("\t%s\t%%%s, (%%r11,%%%s,%d)"
+            out.append("\tleaq\t%s(%%rip), %%%s" % (base, scratch()))
+            out.append("\t%s\t%%%s, (%%%s,%%%s,%d)"
                        % (w, src_reg, idx, scale_of(args[0])))
     elif op == "FILL":
-        mem = mem_operand(args[0], env, s.id)
-        kind, val = value_of(args[1], consts, s.id, addr_ok=True)
+        mem = mem_operand(args[0], env, sid)
+        kind, val = value_of(args[1], consts, sid, addr_ok=True, allow_bare=bare)
         out.append("\tleaq\t%s, %%rdi" % mem)
         emit_imm_to("%rax", val, out)
         out.append("\tmovl\t$%s, %%ecx" % args[2])
@@ -516,21 +663,71 @@ def compile_shape(s, env, strs, out):
             pass          # emitted by the compiler via .incbin
         elif args[0] not in strs:
             raise CompileError("%s: no string named %r - declare "
-                               'data-str="%s=text"' % (s.id, args[0], args[0]))
+                               'data-str="%s=text"' % (sid, args[0], args[0]))
         out.append("\tleaq\tstr_%s(%%rip), %%rdi" % args[0])
         out.append("\tcall\tputstr")
     elif op == "PUTINT":
-        kind, val = value_of(args[0], consts, s.id, addr_ok=True)
+        kind, val = value_of(args[0], consts, sid, addr_ok=True, allow_bare=bare)
         if kind == "reg":
             out.append("\tmovq\t%%%s, %%rdi" % val)
         else:
             emit_imm_to("%rdi", val, out)
         out.append("\tcall\tputint")
     elif op == "EXIT":
-        _k, _v = value_of(args[0], consts, s.id, addr_ok=True)
+        _k, _v = value_of(args[0], consts, sid, addr_ok=True, allow_bare=bare)
         out.append("\tmovl\t$0x%x, %%edi" % _v)
         out.append("\tmovl\t$60, %eax")
         out.append("\tsyscall")
+    elif op in ("PUSH", "POP"):
+        a = args[0]
+        if a.startswith("@"):
+            mem = mem_operand(a, env, sid)
+            out.append("\t%s\t%s" % (op.lower(), mem))
+        else:
+            kind, val = value_of(a, consts, sid, addr_ok=True, allow_bare=bare)
+            if kind == "reg":
+                out.append("\t%s\t%%%s" % (op.lower(), val))
+            else:
+                out.append("\tpushq\t$0x%x" % val if op == "PUSH"
+                           else "\tpopq\t%%rax")
+                if op == "POP" and kind != "reg":
+                    # POP of an immediate is meaningless; the value came from a
+                    # constant, so push it back to keep the operand meaningful.
+                    out.append("\tpushq\t$0x%x" % val)
+    elif op == "SWAPGS":
+        out.append("\tswapgs")
+    elif op == "NOP":
+        out.append("\tnop")
+    elif op == "TO_USER":
+        # No instruction: control leaves the program here. A kernel fragment
+        # does not "exit" the way a userspace process does.
+        pass
+    elif op == "CMP":
+        # CMP only sets flags; the rhombus's data-eq/gt edges read them.
+        a, b = args
+        ka, va = value_of(a, consts, sid, addr_ok=True, allow_bare=bare)
+        if ka == "reg":
+            out.append("\tcmpq\t%%%s, %%%s" % (va, reg_of(b, sid)))
+        else:
+            kb, vb = value_of(b, consts, sid, addr_ok=True, allow_bare=bare)
+            if kb == "reg":
+                out.append("\tcmpq\t$0x%x, %%%s" % (vb, va))
+            else:
+                out.append("\tmovq\t$0x%x, %%%s" % (vb, scratch()))
+                out.append("\tcmpq\t%%%s, %%%s" % (scratch(), va))
+    elif op == "SYSRET":
+        out.append("\tsysretq")
+    elif op == "IRET":
+        out.append("\tiretq")
+    elif op == "CALL":
+        # A call names a *shape*, the same way the edges do. That is checked
+        # first: the target is a label in this program, not a value, so it must
+        # not go through the register/constant/address machinery.
+        tgt = args[0]
+        if not (tgt.startswith("@") and tgt[1:] in shapes_of(s, env)):
+            raise CompileError("%s: CALL names a shape, so its operand must be "
+                               "@shapeid - got %r" % (sid, tgt))
+        out.append("\tcall\t.L%s" % tgt[1:])
     s.op = op
 
 
@@ -619,10 +816,20 @@ def main():
     ap.add_argument("source")
     ap.add_argument("-o", "--out", default="a.out")
     ap.add_argument("--asm", action="store_true", help="also write the .s next to the binary")
+    ap.add_argument("--use-r11", action="store_true",
+                    help="R11 belongs to the program, not the compiler "
+                         "(kernel entry paths: the CPU puts RFLAGS there). "
+                         "The compiler then borrows RDI as scratch instead.")
     args = ap.parse_args()
+    if args.use_r11:
+        global USE_R11, REGS
+        USE_R11 = True
+        REGS = REGS + ["R11"]
+        icons.REGS["r11"] = dict(emoji='\U0001F7E7', hue='warm',
+                                 out='M4 4h16v16H4zM8 8h8v8H8z')
     try:
         consts, bss, strs, byte_tables, shapes, order, entry = load(args.source)
-        env = Env(consts, bss, byte_tables)
+        env = Env(consts, bss, byte_tables, shapes.keys())
         asm_text = build_asm(env, strs, shapes, order, entry,
                              source_path=os.path.abspath(args.source))
         link(asm_text, args.out, args.out + ".s" if args.asm else None)
