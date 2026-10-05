@@ -194,9 +194,10 @@ def main():
         src_loc=sum(1 for _ in open(os.path.join(ROOT, 'fsvgc.py'),
                                      encoding='utf-8')),
     )
-    outdir = os.path.join(ROOT, 'site')
-    os.makedirs(outdir, exist_ok=True)
-    path = os.path.join(outdir, 'index.html')
+    # The repo root IS the Pages root: GitHub serves the branch as-is, so an
+    # index.html one directory down would 404. Publishing into site/ worked
+    # locally and failed only once deployed, which is the worst time to find out.
+    path = os.path.join(ROOT, 'index.html')
     with open(path, 'w', encoding='utf-8') as f:
         f.write(doc)
     # An empty file at the repo root tells Jekyll to serve the tree untouched.

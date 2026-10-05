@@ -65,6 +65,25 @@ cp -f fsvgc.py svg2png.py SPEC.md dist/
 echo "=== site"
 python3 tools/mkdocs.py
 
+# Pages serves the BRANCH ROOT, and it serves only what git TRACKS. Two ways to
+# get a 404 that the build cannot otherwise see, both of which happened:
+#
+#   * index.html sat in site/ -- the build was green, the page rendered locally,
+#     and the live site was empty, because the repo root had no index.html.
+#   * index.html could be .gitignore'd -- it builds fine on disk and is simply
+#     absent from the deployed tree.
+#
+# So assert what git will actually publish. Note that checking `[[ -f index.html ]]`
+# here would be worthless: mkdocs.py has just written it, so it can never be
+# missing. A check that cannot fail is not a check.
+if ! git ls-files | grep -qx 'index.html'; then
+  echo "FAIL: index.html is not tracked by git -- Pages would not serve it"
+  exit 1
+fi
+if git ls-files | grep -qx 'site/index.html'; then
+  echo "FAIL: site/index.html is tracked; Pages serves the root, not site/"
+  exit 1
+fi
 echo
 (( fail )) && { echo "BUILD FAILED"; exit 1; }
 echo "OK"
