@@ -67,6 +67,51 @@ for name in icons.REGS:
     check(name.upper() in fsvgc.REGS,
           "icons.py defines register %r that fsvgc does not have" % name)
 
+# 7. NO TWO REGISTERS MAY DRAW THE SAME OUTLINE.
+#
+# This is not a style rule, it is the whole basis of the register table. The
+# claim in the docs is that a register is identified by its outline and hue is
+# only a secondary cue -- so two identical outlines make that claim false for
+# that pair and leave hue carrying the identity alone, which is exactly what
+# fails on a monochrome printout or for a colour-blind reader.
+#
+# r8 and r13 were both a cross for a while, and the emoji test above could not
+# see it: the codepoints were distinct, so the compiler was perfectly correct
+# while the drawing was useless. Uniqueness of the KEY and distinctness of the
+# DRAWING are different invariants and need different checks.
+import re as _re
+import itertools as _it
+
+
+def _sig(d):
+    return _re.sub(r'\s+', '', d)
+
+
+for a, b in _it.combinations(icons.REGS, 2):
+    check(_sig(icons.REGS[a]['out']) != _sig(icons.REGS[b]['out']),
+          "registers %s and %s draw the SAME outline" % (a, b))
+
+# 7b. Nor may one outline be a strict prefix of another -- that is the
+# "filled-in twin" case, where two shapes read as the same figure at a glance.
+for a, b in _it.combinations(icons.REGS, 2):
+    ta, tb = _sig(icons.REGS[a]['out']), _sig(icons.REGS[b]['out'])
+    if ta != tb:
+        short, long, names = ((ta, tb, (a, b)) if len(ta) < len(tb)
+                              else (tb, ta, (b, a)))
+        check(short not in long,
+              "outline of %s is contained in %s -- they will read as one shape"
+              % (names[0], names[1]))
+
+# 7c. And no two may READ as the same shape, which the two checks above cannot
+# establish. Comparing path strings proves the paths differ; it says nothing
+# about whether a person can tell the figures apart. rax and r10 were both
+# hexagons of slightly different size -- unequal as strings, identical to the
+# eye -- and every check in this file passed them.
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tools'))
+import shapes
+for a, b in shapes.compare_all(icons.REGS):
+    check(False, "registers %s and %s are not visually distinguishable" % (a, b))
+
 if fails:
     print("FAIL (%d)" % len(fails))
     for f in fails:

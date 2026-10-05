@@ -102,17 +102,21 @@ REGS = {
     'rax': dict(emoji='\U0001F53A', out='M12 3l8 5v8l-8 5-8-5V8z',  hue='warm'),
     'rbx': dict(emoji='\U0001F536', out='M5 5h14v14H5z',            hue='cool'),
     'rcx': dict(emoji='\U0001F537', out='M12 3l9 9-9 9-9-9z',        hue='warm'),
-    'rdx': dict(emoji='\U0001F535', out='M12 2l10 10-10 10L2 12z',   hue='cool'),
+    'rdx': dict(emoji='\U0001F535', out='M12 2l10 10-10 10L2 12zM8 12h8M12 8v8', hue='cool'),
     'rsi': dict(emoji='⭐',           out='M12 2l3 7 7 1-5 5 1 7-6-3-6 3 1-7-5-5-7-1 7-1z', hue='warm'),
     'rdi': dict(emoji='\U0001F511', out='M9 4a4 4 0 1 1 0 8 4 4 0 0 1 0-8zm1 3v2h6v-2z', hue='cool'),
     'rbp': dict(emoji='\U0001F512', out='M6 10V7a6 6 0 0 1 12 0v3M5 10h14v10H5z', hue='warm'),
     'rsp': dict(emoji='\U0001F9F1', out='M4 6h16v5H4zM4 15h16v4H4z', hue='cool'),
-    'r8':  dict(emoji='\U0001F7E8', out='M3 12h6V6h6v6h6v6h-6v6H9v-6H3z', hue='warm'),
-    'r9':  dict(emoji='\U0001F7E2', out='M5 3l8 4v10l-8 4z', hue='cool'),
-    'r10': dict(emoji='\U0001F7E1', out='M12 2l10 6v8l-10 6-10-6V8z', hue='warm'),
-    'r12': dict(emoji='\U0001F7E0', out='M3 12l9-9 9 9-9 9zM7 12l5-5 5 5-5 5z', hue='cool'),
-    'r13': dict(emoji='\U0001F7EB', out='M3 12h6V6h6v6h6v6h-6v6H9v-6H3z', hue='warm'),
-    'r14': dict(emoji='▣',           out='M4 4h16v16H4zM8 8h8v8H8z', hue='cool'),
+    'r8':  dict(emoji='\U0001F7E8', out='M3 12h6V6h6v6h6v6h-6v6H9v-6H3z',  hue='warm'),
+    'r9':  dict(emoji='\U0001F7E2', out='M5 3l8 4v10l-8 4z',           hue='cool'),
+    'r10': dict(emoji='\U0001F7E1', out='M3 6h18l-3 14H6z',            hue='warm'),
+    'r12': dict(emoji='\U0001F7E0', out='M12 2l10 18H2zM12 8l5 8H7z',    hue='cool'),
+       # r13 was once the SAME path as r8 (both were a cross), which is precisely
+       # the failure this table exists to prevent: two registers that draw
+       # identically cannot be told apart on paper, so the outline is no longer
+       # carrying the identity and only hue is left. It is now a triangle-in-square.
+    'r13': dict(emoji='\U0001F7EB', out='M4 4h16v16H4zM12 7l4.5 8h-9z',  hue='warm'),
+    'r14': dict(emoji='▣',           out='M4 4h16v16H4zM8 8h8v8H8z',      hue='cool'),
     'r15': dict(emoji='◈',           out='M12 2l10 10-10 10L2 12zM12 7l5 5-5 5-5-5z', hue='warm'),
 }
 

@@ -56,6 +56,15 @@ PYEOF
 done
 
 cp -f fsvgc.py svg2png.py SPEC.md dist/
+
+# The glyph reference page. Generated from icons.py -- the same table the
+# compiler resolves against -- so an opcode added to the language cannot fail to
+# appear on the page. It also embeds each program's real assembly, which means
+# it must be regenerated whenever the programs change; putting it here makes
+# that automatic rather than a thing to remember.
+echo "=== site"
+python3 tools/mkdocs.py
+
 echo
 (( fail )) && { echo "BUILD FAILED"; exit 1; }
 echo "OK"

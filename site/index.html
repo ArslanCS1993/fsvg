@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>FSVG &mdash; a programming language with no letters in it</title>
+<style>
+:root {
+  --bg:#0d1117; --panel:#161b22; --line:#30363d; --ink:#e6edf3;
+  --dim:#8b949e; --warm:#f0883e; --cool:#58a6ff; --good:#3fb950; --bad:#f85149;
+}
+* { box-sizing:border-box }
+body {
+  margin:0; background:var(--bg); color:var(--ink);
+  font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+}
+main { max-width:940px; margin:0 auto; padding:40px 22px 90px }
+h1 { font-size:2.1em; line-height:1.2; margin:0 0 6px }
+h2 { margin:52px 0 6px; padding-top:22px; border-top:1px solid var(--line) }
+h3 { margin:26px 0 6px }
+p { max-width:70ch }
+a { color:var(--cool) }
+code { font:14px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace; color:var(--warm) }
+.dim { color:var(--dim) }
+.bad { color:var(--bad) }
+.lead { font-size:1.1em; color:var(--dim) }
+.cards { display:flex; flex-wrap:wrap; gap:12px; margin:26px 0 }
+.card {
+  flex:1 1 150px; background:var(--panel); border:1px solid var(--line);
+  border-radius:8px; padding:14px 16px;
+}
+.card b { display:block; font-size:1.7em; line-height:1.2 }
+.card span { color:var(--dim); font-size:.86em }
+table { border-collapse:collapse; width:100%; margin:18px 0 }
+td,th { text-align:left; padding:9px 10px; border-bottom:1px solid var(--line) }
+th { color:var(--dim); font-weight:600; font-size:.85em; text-transform:uppercase;
+      letter-spacing:.06em }
+td.glyph { font-size:1.5em; width:62px; text-align:center; line-height:1 }
+td.draw { width:56px }
+.ico { vertical-align:middle }
+pre {
+  background:var(--panel); border:1px solid var(--line); border-radius:6px;
+  padding:14px; overflow:auto; font:13px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+pre.asm { color:var(--cool) }
+pre.src { color:var(--dim); font-size:12px }
+details { margin:14px 0 }
+summary { cursor:pointer; color:var(--dim); font-size:.9em }
+summary:hover { color:var(--ink) }
+.prog { border-left:2px solid var(--line); padding-left:18px; margin:26px 0 }
+.preview { background:#fff; border-radius:6px; padding:10px; margin-top:10px;
+            overflow:auto; max-height:520px }
+.preview svg { max-width:100%; height:auto }
+.rule { background:var(--panel); border:1px solid var(--line); border-left:3px solid var(--warm);
+         border-radius:6px; padding:12px 16px; margin:20px 0; max-width:72ch }
+footer { margin-top:60px; padding-top:20px; border-top:1px solid var(--line);
+          color:var(--dim); font-size:.88em }
+</style>
+</head>
+<body><main>
+
+<h1>FSVG</h1>
+<p class="lead">A flowchart language that compiles to x86-64 machine code.
+There are no letters in a program &mdash; every instruction is drawn.</p>
+
+<div class="cards">
+  <div class="card"><b>11</b><span>instructions</span></div>
+  <div class="card"><b>15</b><span>registers</span></div>
+  <div class="card"><b>26</b><span>glyphs, all unique</span></div>
+  <div class="card"><b>847</b><span>lines of compiler</span></div>
+</div>
+
+<p>An instruction is written as an emoji and drawn as an SVG icon. Both are
+required and they must agree: the <b>emoji is the key the compiler resolves</b>
+&mdash; an exact codepoint, never a guess from how the picture looks &mdash; and
+the <b>drawing is what a human reads</b>. Because resolution is exact, a
+hand-edited icon cannot silently compile to the wrong opcode; it just stops
+being the instruction you drew.</p>
+
+<div class="rule">
+Registers are identified by <b>outline</b>, not colour &mdash; eight distinct
+shapes in two hue families give sixteen registers. Colour alone would fail for a
+colour-blind reader and would vanish on a monochrome printer.
+</div>
+
+<h2>Instructions</h2>
+<table>
+<tr><th></th><th></th><th>compiles to</th><th>takes</th></tr>
+<tr><td class="glyph">🔄</td><td class="draw"><svg class="ico" viewBox="0 0 24 24" width="34" height="34" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.7M20 4v4h-4" fill="none" stroke="currentColor" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round"/></svg></td><td><code>swapgs</code></td><td class="dim">no operand</td></tr>
+<tr><td class="glyph">🛡</td><td class="draw"><svg class="ico" viewBox="0 0 24 24" width="34" height="34" aria-hidden="true"><path d="M3 12h13M13 8l5 4-5 4" fill="none" stroke="currentColor" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round"/></svg></td><td><code>mov</code></td><td class="dim">2 operands</td></tr>
+<tr><td class="glyph">📥</td><td class="draw"><svg class="ico" viewBox="0 0 24 24" width="34" height="34" aria-hidden="true"><path d="M12 3v11M8 10l4 4 4-4M4 20h16" fill="none" stroke="currentColor" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round"/></svg></td><td><code>push</code></td><td class="dim">1 operand</td></tr>
+<tr><td class="glyph">📤</td><td class="draw"><svg class="ico" viewBox="0 0 24 24" width="34" height="34" aria-hidden="true"><path d="M12 14V3M8 7l4-4 4 4M4 20h16" fill="none" stroke="currentColor" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round"/></svg></td><td><code>pop</code></td><td class="dim">1 operand</td></tr>
+<tr><td class="glyph">🗑</td><td class="draw"><svg class="ico" viewBox="0 0 24 24" width="34" height="34" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" fill="none" stroke="currentColor" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round"/></svg></td><td><code>xor</code></td><td class="dim">2 operands</td></tr>
+<tr><td class="glyph">🤖</td><td class="draw"><svg class="ico" viewBox="0 0 24 24" width="34" height="34" aria-hidden="true"><path d="M5 9h14M5 15h14M9 5v14" fill="none" stroke="currentColor" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round"/></svg></td><td><code>cmp</code></td><td class="dim">2 operands</td></tr>
+<tr><td class="glyph">📞</td><td class="draw"><svg class="ico" viewBox="0 0 24 24" width="34" height="34" aria-hidden="true"><path d="M6 3l4 5-2.5 2A11 11 0 0 0 14 17.5L16 15l5 4" fill="none" stroke="currentColor" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round"/></svg></td><td><code>call</code></td><td class="dim">1 operand</td></tr>
+<tr><td class="glyph">🚀</td><td class="draw"><svg class="ico" viewBox="0 0 24 24" width="34" height="34" aria-hidden="true"><path d="M12 3c4 3 5 8 4 12l-4 6-4-6c-1-4 0-9 4-12z" fill="none" stroke="currentColor" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round"/></svg></td><td><code>sysret</code></td><td class="dim">no operand</td></tr>
+<tr><td class="glyph">🛑</td><td class="draw"><svg class="ico" viewBox="0 0 24 24" width="34" height="34" aria-hidden="true"><path d="M12 3l9 16H3z" fill="none" stroke="currentColor" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round"/></svg></td><td><code>iret</code></td><td class="dim">no operand</td></tr>
+<tr><td class="glyph">🛐</td><td class="draw"><svg class="ico" viewBox="0 0 24 24" width="34" height="34" aria-hidden="true"><path d="M8 12h8" fill="none" stroke="currentColor" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round"/></svg></td><td><code>nop</code></td><td class="dim">no operand</td></tr>
+<tr><td class="glyph">🚪</td><td class="draw"><svg class="ico" viewBox="0 0 24 24" width="34" height="34" aria-hidden="true"><path d="M6 3h12v18H6zM10 12h4M12 10v4" fill="none" stroke="currentColor" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round"/></svg></td><td><code>to_user</code></td><td class="dim">no operand</td></tr>
+</table>
+
+<h2>Registers</h2>
+<table>
+<tr><th></th><th></th><th>is</th></tr>
+<tr><td class="glyph">🔺</td><td class="draw"><svg class="ico" viewBox="0 0 24 24" width="34" height="34" aria-hidden="true"><path d="M12 3l8 5v8l-8 5-8-5V8z" fill="none" stroke="#f0883e" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round"/></svg></td><td><code>rax</code></td></tr>
+<tr><td class="glyph">🔶</td><td class="draw"><svg class="ico" viewBox="0 0 24 24" width="34" height="34" aria-hidden="true"><path d="M5 5h14v14H5z" fill="none" stroke="#58a6ff" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round"/></svg></td><td><code>rbx</code></td></tr>
+<tr><td class="glyph">🔷</td><td class="draw"><svg class="ico" viewBox="0 0 24 24" width="34" height="34" aria-hidden="true"><path d="M12 3l9 9-9 9-9-9z" fill="none" stroke="#f0883e" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round"/></svg></td><td><code>rcx</code></td></tr>
+<tr><td class="glyph">🔵</td><td class="draw"><svg class="ico" viewBox="0 0 24 24" width="34" height="34" aria-hidden="true"><path d="M12 2l10 10-10 10L2 12zM8 12h8M12 8v8" fill="none" stroke="#58a6ff" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round"/></svg></td><td><code>rdx</code></td></tr>
+<tr><td class="glyph">⭐</td><td class="draw"><svg class="ico" viewBox="0 0 24 24" width="34" height="34" aria-hidden="true"><path d="M12 2l3 7 7 1-5 5 1 7-6-3-6 3 1-7-5-5-7-1 7-1z" fill="none" stroke="#f0883e" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round"/></svg></td><td><code>rsi</code></td></tr>
+<tr><td class="glyph">🔑</td><td class="draw"><svg class="ico" viewBox="0 0 24 24" width="34" height="34" aria-hidden="true"><path d="M9 4a4 4 0 1 1 0 8 4 4 0 0 1 0-8zm1 3v2h6v-2z" fill="none" stroke="#58a6ff" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round"/></svg></td><td><code>rdi</code></td></tr>
+<tr><td class="glyph">🔒</td><td class="draw"><svg class="ico" viewBox="0 0 24 24" width="34" height="34" aria-hidden="true"><path d="M6 10V7a6 6 0 0 1 12 0v3M5 10h14v10H5z" fill="none" stroke="#f0883e" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round"/></svg></td><td><code>rbp</code></td></tr>
+<tr><td class="glyph">🧱</td><td class="draw"><svg class="ico" viewBox="0 0 24 24" width="34" height="34" aria-hidden="true"><path d="M4 6h16v5H4zM4 15h16v4H4z" fill="none" stroke="#58a6ff" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round"/></svg></td><td><code>rsp</code></td></tr>
+<tr><td class="glyph">🟨</td><td class="draw"><svg class="ico" viewBox="0 0 24 24" width="34" height="34" aria-hidden="true"><path d="M3 12h6V6h6v6h6v6h-6v6H9v-6H3z" fill="none" stroke="#f0883e" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round"/></svg></td><td><code>r8</code></td></tr>
+<tr><td class="glyph">🟢</td><td class="draw"><svg class="ico" viewBox="0 0 24 24" width="34" height="34" aria-hidden="true"><path d="M5 3l8 4v10l-8 4z" fill="none" stroke="#58a6ff" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round"/></svg></td><td><code>r9</code></td></tr>
+<tr><td class="glyph">🟡</td><td class="draw"><svg class="ico" viewBox="0 0 24 24" width="34" height="34" aria-hidden="true"><path d="M3 6h18l-3 14H6z" fill="none" stroke="#f0883e" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round"/></svg></td><td><code>r10</code></td></tr>
+<tr><td class="glyph">🟠</td><td class="draw"><svg class="ico" viewBox="0 0 24 24" width="34" height="34" aria-hidden="true"><path d="M12 2l10 18H2zM12 8l5 8H7z" fill="none" stroke="#58a6ff" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round"/></svg></td><td><code>r12</code></td></tr>
+<tr><td class="glyph">🟫</td><td class="draw"><svg class="ico" viewBox="0 0 24 24" width="34" height="34" aria-hidden="true"><path d="M4 4h16v16H4zM12 7l4.5 8h-9z" fill="none" stroke="#f0883e" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round"/></svg></td><td><code>r13</code></td></tr>
+<tr><td class="glyph">▣</td><td class="draw"><svg class="ico" viewBox="0 0 24 24" width="34" height="34" aria-hidden="true"><path d="M4 4h16v16H4zM8 8h8v8H8z" fill="none" stroke="#58a6ff" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round"/></svg></td><td><code>r14</code></td></tr>
+<tr><td class="glyph">◈</td><td class="draw"><svg class="ico" viewBox="0 0 24 24" width="34" height="34" aria-hidden="true"><path d="M12 2l10 10-10 10L2 12zM12 7l5 5-5 5-5-5z" fill="none" stroke="#f0883e" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round"/></svg></td><td><code>r15</code></td></tr>
+</table>
+
+<h2>Programs</h2>
+<p>Real programs, with the assembly the compiler actually emitted. Two of them
+run; the third is kernel code and cannot.</p>
+
+<section class="prog">
+<h3>A sine wave <span class="dim">01-hello</span></h3>
+<p>Indexes a 32-byte table, multiplies, and writes a real SVG document. This is the first program that produces something you can look at.</p>
+<details><summary>the program (77 lines, no letters)</summary><pre class="src">&lt;!-- FSVG program 1 - the first thing that boots.
+
+     It walks a sine table with an index, scales the result into screen
+     coordinates, and writes a real SVG document to stdout.
+
+        ./01-hello &gt; out.svg
+
+     Every number in this program is either a SIZE or a MEMORY ADDRESS. Every
+     other value is a register or a named constant - there is not one magic
+     number in the body. The sine table is 32 bytes read by index, which is
+     what makes it a table and not a literal. --&gt;
+&lt;svg xmlns=&quot;http://www.w3.org/2000/svg&quot; width=&quot;900&quot; height=&quot;520&quot;
+     data-const=&quot;POINTS=160,SCALE=5,MID=240,TABLE_MASK=31,ZERO=0,ONE=1,STATUS=0&quot;
+     data-bytes=&quot;SINE=0,18,34,50,64,75,83,88,90,88,83,75,
+                 64,50,34,18,0,-18,-34,-50,-64,-75,-83,-88,
+                 -90,-88,-83,-75,-64,-50,-34,-18&quot;
+     data-str=&quot;HEAD=&amp;lt;?xml version=&#x27;1.0&#x27; encoding=&#x27;UTF-8&#x27;?&amp;gt;&amp;lt;svg xmlns=&#x27;http://www.w3.org/2000/svg&#x27; width=&#x27;900&#x27; height=&#x27;520&#x27;&amp;gt;&amp;lt;rect width=&#x27;900&#x27; height=&#x27;520&#x27; fill=&#x27;#0d1117&#x27;/&amp;gt;&amp;lt;path fill=&#x27;none&#x27; stroke=&#x27;#7ee787&#x27; stroke-width=&#x27;3&#x27; d=&#x27;M30,240;TAIL=&#x27;/&amp;gt;&amp;lt;/svg&amp;gt;;COMMA=,;LE=L&quot;&gt;
+
+  &lt;g&gt;
+    &lt;rect id=&quot;start&quot; x=&quot;40&quot; y=&quot;30&quot; width=&quot;230&quot; height=&quot;38&quot;
+          data-entry=&quot;1&quot; data-next=&quot;init_i&quot;&gt;PRINT HEAD&lt;/rect&gt;
+
+    &lt;!-- i = 0 --&gt;
+    &lt;rect id=&quot;init_i&quot; x=&quot;40&quot; y=&quot;100&quot; width=&quot;230&quot; height=&quot;38&quot;
+          data-next=&quot;loop&quot;&gt;MOV RCX, ZERO&lt;/rect&gt;
+
+    &lt;!-- ================= the loop: one decision, three exits ================= --&gt;
+    &lt;polygon id=&quot;loop&quot; points=&quot;200,190 280,226 200,262 120,226&quot;
+             data-lt=&quot;body&quot; data-eq=&quot;done&quot; data-gt=&quot;done&quot;&gt;CMP RCX, POINTS&lt;/polygon&gt;
+
+    &lt;!-- idx = i &amp;amp; 31  -&gt;  wraps the sine table without a division --&gt;
+    &lt;rect id=&quot;body&quot; x=&quot;360&quot; y=&quot;204&quot; width=&quot;240&quot; height=&quot;38&quot;
+          data-next=&quot;mask&quot;&gt;MOV RSI, RCX&lt;/rect&gt;
+    &lt;rect id=&quot;mask&quot; x=&quot;360&quot; y=&quot;266&quot; width=&quot;240&quot; height=&quot;38&quot;
+          data-next=&quot;load&quot;&gt;AND RSI, TABLE_MASK&lt;/rect&gt;
+    &lt;rect id=&quot;load&quot; x=&quot;360&quot; y=&quot;328&quot; width=&quot;240&quot; height=&quot;38&quot;
+          data-next=&quot;scale&quot;&gt;LOAD.SB RDX, @SINE[RSI]&lt;/rect&gt;
+
+    &lt;!-- x = i * 5 + 30 --&gt;
+    &lt;rect id=&quot;scale&quot; x=&quot;360&quot; y=&quot;390&quot; width=&quot;240&quot; height=&quot;38&quot;
+          data-next=&quot;mul&quot;&gt;MOV RAX, RCX&lt;/rect&gt;
+    &lt;rect id=&quot;mul&quot; x=&quot;360&quot; y=&quot;452&quot; width=&quot;240&quot; height=&quot;38&quot;
+          data-next=&quot;add_x&quot;&gt;MUL RAX, SCALE&lt;/rect&gt;
+    &lt;rect id=&quot;add_x&quot; x=&quot;360&quot; y=&quot;514&quot; width=&quot;240&quot; height=&quot;38&quot;
+          data-next=&quot;y_mid&quot;&gt;ADD RAX, SCALE&lt;/rect&gt;
+
+    &lt;!-- y = 240 - table[i]   -&gt; the wave crosses the middle of the screen --&gt;
+    &lt;rect id=&quot;y_mid&quot; x=&quot;360&quot; y=&quot;576&quot; width=&quot;240&quot; height=&quot;38&quot;
+          data-next=&quot;y_sub&quot;&gt;MOV RBX, MID&lt;/rect&gt;
+    &lt;rect id=&quot;y_sub&quot; x=&quot;360&quot; y=&quot;638&quot; width=&quot;240&quot; height=&quot;38&quot;
+          data-next=&quot;put_le&quot;&gt;SUB RBX, RDX&lt;/rect&gt;
+
+    &lt;!-- One path segment per point:  L x , y
+         Emitting &quot;L&quot; before each point is what removes the need for a
+         separator BETWEEN points. Printing the comma between x and y alone
+         produced &quot;5,240&quot; + &quot;10,214&quot; = &quot;5,24010,214&quot;, and a separator after y
+         alone produced &quot;5240&quot; - the SVG path is only unambiguous if each
+         point carries its own command letter. --&gt;
+    &lt;rect id=&quot;put_le&quot; x=&quot;700&quot; y=&quot;452&quot; width=&quot;200&quot; height=&quot;38&quot;
+          data-next=&quot;put_x&quot;&gt;PRINT LE&lt;/rect&gt;
+    &lt;rect id=&quot;put_x&quot; x=&quot;700&quot; y=&quot;514&quot; width=&quot;200&quot; height=&quot;38&quot;
+          data-next=&quot;put_comma&quot;&gt;PUTINT RAX&lt;/rect&gt;
+    &lt;rect id=&quot;put_comma&quot; x=&quot;700&quot; y=&quot;576&quot; width=&quot;200&quot; height=&quot;38&quot;
+          data-next=&quot;put_y&quot;&gt;PRINT COMMA&lt;/rect&gt;
+    &lt;rect id=&quot;put_y&quot; x=&quot;700&quot; y=&quot;638&quot; width=&quot;200&quot; height=&quot;38&quot;
+          data-next=&quot;inc&quot;&gt;PUTINT RBX&lt;/rect&gt;
+
+    &lt;!-- i = i + 1, and the edge that closes the loop --&gt;
+    &lt;rect id=&quot;inc&quot; x=&quot;360&quot; y=&quot;700&quot; width=&quot;240&quot; height=&quot;38&quot;
+          data-next=&quot;loop&quot;&gt;ADD RCX, ONE&lt;/rect&gt;
+
+    &lt;rect id=&quot;done&quot; x=&quot;40&quot; y=&quot;330&quot; width=&quot;230&quot; height=&quot;38&quot;
+          data-next=&quot;bye&quot;&gt;PRINT TAIL&lt;/rect&gt;
+    &lt;rect id=&quot;bye&quot; x=&quot;40&quot; y=&quot;392&quot; width=&quot;230&quot; height=&quot;38&quot;
+          data-next=&quot;bye&quot;&gt;EXIT STATUS&lt;/rect&gt;
+  &lt;/g&gt;
+&lt;/svg&gt;</pre></details>
+<p class="dim">73 instructions emitted:</p>
+<pre class="asm">_start:
+jmp	.Lstart
+leaq	str_HEAD(%rip), %rdi
+call	putstr
+jmp	.Linit_i
+movq	$0x0, %rcx
+jmp	.Lloop
+movq	$160, %r11
+cmpq	%r11, %rcx
+jl	.Lloop_lt
+je	.Lloop_eq
+jg	.Lloop_gt
+jmp	.Lbody
+jmp	.Ldone
+jmp	.Ldone
+movq	%rcx, %rsi
+jmp	.Lmask
+andq	$0x1f, %rsi
+jmp	.Lload
+leaq	SINE(%rip), %r11
+movsbq	(%r11,%rsi,1), %rdx
+jmp	.Lscale
+movq	%rcx, %rax
+jmp	.Lmul
+movq	%rax, %rax
+imulq	$0x5, %rax, %rax
+movq	%rax, %rax
+jmp	.Ladd_x
+addq	$0x5, %rax
+jmp	.Ly_mid
+movq	$0xf0, %rbx
+jmp	.Ly_sub
+subq	%rdx, %rbx
+jmp	.Lput_le
+leaq	str_LE(%rip), %rdi
+call	putstr
+jmp	.Lput_x
+movq	%rax, %rdi
+call	putint
+jmp	.Lput_comma
+leaq	str_COMMA(%rip), %rdi
+call	putstr
+jmp	.Lput_y
+movq	%rbx, %rdi
+call	putint
+jmp	.Linc
+addq	$0x1, %rcx
+jmp	.Lloop
+leaq	str_TAIL(%rip), %rdi
+call	putstr
+jmp	.Lbye
+movl	$0x0, %edi
+movl	$60, %eax
+syscall
+jmp	.Lbye
+pushq	%rax
+pushq	%rcx
+pushq	%rdx
+pushq	%rsi
+pushq	%rdi
+pushq	%r8
+pushq	%r9
+pushq	%r10
+pushq	%r11
+popq	%r11
+popq	%r10
+popq	%r9
+popq	%r8
+popq	%rdi
+popq	%rsi
+popq	%rdx
+popq	%rcx
+popq	%rax</pre>
+<details open><summary>what it prints (1481 bytes, live from build/)</summary><div class="preview"><?xml version='1.0' encoding='UTF-8'?><svg xmlns='http://www.w3.org/2000/svg' width='900' height='520'><rect width='900' height='520' fill='#0d1117'/><path fill='none' stroke='#7ee787' stroke-width='3' d='M30,240L5,240L10,222L15,206L20,190L25,176L30,165L35,157L40,152L45,150L50,152L55,157L60,165L65,176L70,190L75,206L80,222L85,240L90,258L95,274L100,290L105,304L110,315L115,323L120,328L125,330L130,328L135,323L140,315L145,304L150,290L155,274L160,258L165,240L170,222L175,206L180,190L185,176L190,165L195,157L200,152L205,150L210,152L215,157L220,165L225,176L230,190L235,206L240,222L245,240L250,258L255,274L260,290L265,304L270,315L275,323L280,328L285,330L290,328L295,323L300,315L305,304L310,290L315,274L320,258L325,240L330,222L335,206L340,190L345,176L350,165L355,157L360,152L365,150L370,152L375,157L380,165L385,176L390,190L395,206L400,222L405,240L410,258L415,274L420,290L425,304L430,315L435,323L440,328L445,330L450,328L455,323L460,315L465,304L470,290L475,274L480,258L485,240L490,222L495,206L500,190L505,176L510,165L515,157L520,152L525,150L530,152L535,157L540,165L545,176L550,190L555,206L560,222L565,240L570,258L575,274L580,290L585,304L590,315L595,323L600,328L605,330L610,328L615,323L620,315L625,304L630,290L635,274L640,258L645,240L650,222L655,206L660,190L665,176L670,165L675,157L680,152L685,150L690,152L695,157L700,165L705,176L710,190L715,206L720,222L725,240L730,258L735,274L740,290L745,304L750,315L755,323L760,328L765,330L770,328L775,323L780,315L785,304L790,290L795,274L800,258'/></svg></div></details>
+</section>
+
+<section class="prog">
+<h3>Prints its own source <span class="dim">02-self</span></h3>
+<p>Emits a copy of its own flowchart to stdout, byte for byte. The first program that can talk about itself.</p>
+<details><summary>the program (19 lines, no letters)</summary><pre class="src">&lt;!-- FSVG program 2: the round trip.
+
+     A program that prints ITS OWN source flowchart. The compiler embeds this
+     file with .incbin, so the output is byte-identical to the input - which
+     means the language can describe itself, and the compiler and the runtime
+     are demonstrably not in the way.
+
+        ./02-self  &gt;  self.svg        # self.svg == this file --&gt;
+&lt;svg xmlns=&quot;http://www.w3.org/2000/svg&quot; width=&quot;900&quot; height=&quot;300&quot;
+     data-const=&quot;STATUS=0&quot;&gt;
+
+  &lt;g&gt;
+    &lt;rect id=&quot;start&quot; x=&quot;60&quot; y=&quot;60&quot; width=&quot;300&quot; height=&quot;46&quot;
+          data-entry=&quot;1&quot; data-next=&quot;bye&quot;&gt;PRINT SOURCE&lt;/rect&gt;
+
+    &lt;rect id=&quot;bye&quot; x=&quot;60&quot; y=&quot;150&quot; width=&quot;300&quot; height=&quot;46&quot;
+          data-next=&quot;bye&quot;&gt;EXIT STATUS&lt;/rect&gt;
+  &lt;/g&gt;
+&lt;/svg&gt;</pre></details>
+<p class="dim">27 instructions emitted:</p>
+<pre class="asm">_start:
+jmp	.Lstart
+leaq	str_SOURCE(%rip), %rdi
+call	putstr
+jmp	.Lbye
+movl	$0x0, %edi
+movl	$60, %eax
+syscall
+jmp	.Lbye
+pushq	%rax
+pushq	%rcx
+pushq	%rdx
+pushq	%rsi
+pushq	%rdi
+pushq	%r8
+pushq	%r9
+pushq	%r10
+pushq	%r11
+popq	%r11
+popq	%r10
+popq	%r9
+popq	%r8
+popq	%rdi
+popq	%rsi
+popq	%rdx
+popq	%rcx
+popq	%rax</pre>
+<details open><summary>what it prints (752 bytes, live from build/)</summary><div class="preview"><?xml version="1.0" encoding="UTF-8"?>
+<!-- FSVG program 2: the round trip.
+
+     A program that prints ITS OWN source flowchart. The compiler embeds this
+     file with .incbin, so the output is byte-identical to the input - which
+     means the language can describe itself, and the compiler and the runtime
+     are demonstrably not in the way.
+
+        ./02-self  >  self.svg        # self.svg == this file -->
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="300"
+     data-const="STATUS=0">
+
+  <g>
+    <rect id="start" x="60" y="60" width="300" height="46"
+          data-entry="1" data-next="bye">PRINT SOURCE</rect>
+
+    <rect id="bye" x="60" y="150" width="300" height="46"
+          data-next="bye">EXIT STATUS</rect>
+  </g>
+</svg></div></details>
+</section>
+
+<section class="prog">
+<h3>Kernel entry: entry_SYSCALL_64 <span class="dim">03-entry-syscall</span></h3>
+<p>The first instructions a Linux kernel runs on a syscall. Real swapgs, real push, real sysret. Compiles and matches the kernel instruction trace -- but cannot run as a userspace program, because swapgs is privileged and faults immediately in ring 3.</p>
+<details><summary>the program (155 lines, no letters)</summary><pre class="src">&lt;!--
+  entry_SYSCALL_64, in FSVG, with no letters in the program.
+
+  Every instruction is one emoji; every register is one emoji. The only letters
+  below are in the XML&#x27;s own attribute names and in the shape ids that make the
+  edges point somewhere. Meaning comes from icons.py, never from the drawing.
+
+  Box for box this is the code the CPU ran, in the order it ran it. The two
+  numbers that appear are the language&#x27;s one concession, because a memory
+  address IS a number: the per-CPU addresses in the trace.
+
+  Compiled with the use-r11 flag: the SYSCALL instruction leaves RFLAGS in R11, so the
+  CPU chose that register and the program gets to own it.
+--&gt;
+&lt;svg xmlns=&quot;http://www.w3.org/2000/svg&quot; viewBox=&quot;0 0 760 2350&quot; data-name=&quot;entry_SYSCALL_64&quot;&gt;
+
+  &lt;!-- swapgs : the very first instruction of the kernel on a syscall --&gt;
+  &lt;rect id=&quot;b01&quot; x=&quot;60&quot; y=&quot;30&quot; width=&quot;300&quot; height=&quot;46&quot; rx=&quot;6&quot; data-entry=&quot;1&quot; data-next=&quot;b02&quot;&gt;
+    &lt;text class=&quot;g&quot; x=&quot;210&quot; y=&quot;60&quot;&gt;🔄&lt;/text&gt;
+  &lt;/rect&gt;
+
+  &lt;!-- mov %rsp, TSS_sp2 : park the user stack pointer in per-CPU scratch --&gt;
+  &lt;rect id=&quot;b02&quot; x=&quot;60&quot; y=&quot;96&quot; width=&quot;300&quot; height=&quot;46&quot; rx=&quot;6&quot; data-next=&quot;b03&quot;&gt;
+    &lt;text class=&quot;g&quot; x=&quot;210&quot; y=&quot;126&quot;&gt;🛡 🧱 @0xffffffff8160c014&lt;/text&gt;
+  &lt;/rect&gt;
+
+  &lt;!-- mov pcpu_hot+X86_top_of_stack, %rsp : switch to the kernel stack --&gt;
+  &lt;rect id=&quot;b03&quot; x=&quot;60&quot; y=&quot;162&quot; width=&quot;300&quot; height=&quot;46&quot; rx=&quot;6&quot; data-next=&quot;b04&quot;&gt;
+    &lt;text class=&quot;g&quot; x=&quot;210&quot; y=&quot;192&quot;&gt;🛡 🧱 @0xffffffff816ba710&lt;/text&gt;
+  &lt;/rect&gt;
+
+  &lt;!-- build struct pt_regs on the kernel stack: ss, sp, flags, cs, ip, orig_ax --&gt;
+  &lt;rect id=&quot;b04&quot; x=&quot;60&quot; y=&quot;228&quot; width=&quot;300&quot; height=&quot;46&quot; rx=&quot;6&quot; data-next=&quot;b05&quot;&gt;
+    &lt;text class=&quot;g&quot; x=&quot;210&quot; y=&quot;258&quot;&gt;📥 43&lt;/text&gt;
+  &lt;/rect&gt;
+
+  &lt;rect id=&quot;b05&quot; x=&quot;60&quot; y=&quot;294&quot; width=&quot;300&quot; height=&quot;46&quot; rx=&quot;6&quot; data-next=&quot;b06&quot;&gt;
+    &lt;text class=&quot;g&quot; x=&quot;210&quot; y=&quot;324&quot;&gt;📥 @0xffffffff8160c014&lt;/text&gt;
+  &lt;/rect&gt;
+
+  &lt;rect id=&quot;b06&quot; x=&quot;60&quot; y=&quot;360&quot; width=&quot;300&quot; height=&quot;46&quot; rx=&quot;6&quot; data-next=&quot;b07&quot;&gt;
+    &lt;text class=&quot;g&quot; x=&quot;210&quot; y=&quot;390&quot;&gt;📥 🟧&lt;/text&gt;
+  &lt;/rect&gt;
+
+  &lt;rect id=&quot;b07&quot; x=&quot;60&quot; y=&quot;426&quot; width=&quot;300&quot; height=&quot;46&quot; rx=&quot;6&quot; data-next=&quot;b08&quot;&gt;
+    &lt;text class=&quot;g&quot; x=&quot;210&quot; y=&quot;456&quot;&gt;📥 51&lt;/text&gt;
+  &lt;/rect&gt;
+
+  &lt;rect id=&quot;b08&quot; x=&quot;60&quot; y=&quot;492&quot; width=&quot;300&quot; height=&quot;46&quot; rx=&quot;6&quot; data-next=&quot;b09&quot;&gt;
+    &lt;text class=&quot;g&quot; x=&quot;210&quot; y=&quot;522&quot;&gt;📥 🔷&lt;/text&gt;
+  &lt;/rect&gt;
+
+  &lt;rect id=&quot;b09&quot; x=&quot;60&quot; y=&quot;558&quot; width=&quot;300&quot; height=&quot;46&quot; rx=&quot;6&quot; data-next=&quot;b10&quot;&gt;
+    &lt;text class=&quot;g&quot; x=&quot;210&quot; y=&quot;588&quot;&gt;📥 🔺&lt;/text&gt;
+  &lt;/rect&gt;
+
+  &lt;!-- PUSH_AND_CLEAR_REGS: one line of the kernel, twenty instructions.
+       Every pushed register is zeroed immediately after it is saved. --&gt;
+  &lt;!-- PUSH_AND_CLEAR_REGS, the kernel&#x27;s own macro: fifteen pushes,
+       then fifteen clears. The order is not a detail — a frame built in
+       the wrong order is a frame the kernel cannot unwind. This box is a
+       block: one source line, twenty-eight instructions. --&gt;
+  &lt;rect id=&quot;b10&quot; x=&quot;60&quot; y=&quot;624&quot; width=&quot;330&quot; height=&quot;754&quot; rx=&quot;6&quot; data-next=&quot;b11&quot;&gt;
+    &lt;text class=&quot;g&quot; x=&quot;225&quot; y=&quot;656&quot;&gt;📥 🔑&lt;/text&gt;
+    &lt;text class=&quot;g&quot; x=&quot;225&quot; y=&quot;682&quot;&gt;📥 ⭐&lt;/text&gt;
+    &lt;text class=&quot;g&quot; x=&quot;225&quot; y=&quot;708&quot;&gt;📥 🔵&lt;/text&gt;
+    &lt;text class=&quot;g&quot; x=&quot;225&quot; y=&quot;734&quot;&gt;📥 🔷&lt;/text&gt;
+    &lt;text class=&quot;g&quot; x=&quot;225&quot; y=&quot;760&quot;&gt;📥 0xffffffffffffffda&lt;/text&gt;
+    &lt;text class=&quot;g&quot; x=&quot;225&quot; y=&quot;786&quot;&gt;📥 🟨&lt;/text&gt;
+    &lt;text class=&quot;g&quot; x=&quot;225&quot; y=&quot;812&quot;&gt;📥 🟢&lt;/text&gt;
+    &lt;text class=&quot;g&quot; x=&quot;225&quot; y=&quot;838&quot;&gt;📥 🟡&lt;/text&gt;
+    &lt;text class=&quot;g&quot; x=&quot;225&quot; y=&quot;864&quot;&gt;📥 🟧&lt;/text&gt;
+    &lt;text class=&quot;g&quot; x=&quot;225&quot; y=&quot;890&quot;&gt;📥 🔶&lt;/text&gt;
+    &lt;text class=&quot;g&quot; x=&quot;225&quot; y=&quot;916&quot;&gt;📥 🔒&lt;/text&gt;
+    &lt;text class=&quot;g&quot; x=&quot;225&quot; y=&quot;942&quot;&gt;📥 🟠&lt;/text&gt;
+    &lt;text class=&quot;g&quot; x=&quot;225&quot; y=&quot;1392&quot;&gt;📥 🟫&lt;/text&gt;
+    &lt;text class=&quot;g&quot; x=&quot;225&quot; y=&quot;1418&quot;&gt;📥 ▣&lt;/text&gt;
+    &lt;text class=&quot;g&quot; x=&quot;225&quot; y=&quot;1444&quot;&gt;📥 ◈&lt;/text&gt;
+    &lt;text class=&quot;g&quot; x=&quot;225&quot; y=&quot;1470&quot;&gt;🗑 ⭐ ⭐&lt;/text&gt;
+    &lt;text class=&quot;g&quot; x=&quot;225&quot; y=&quot;1496&quot;&gt;🗑 🔵 🔵&lt;/text&gt;
+    &lt;text class=&quot;g&quot; x=&quot;225&quot; y=&quot;1522&quot;&gt;🗑 🔷 🔷&lt;/text&gt;
+    &lt;text class=&quot;g&quot; x=&quot;225&quot; y=&quot;1548&quot;&gt;🗑 🟨 🟨&lt;/text&gt;
+    &lt;text class=&quot;g&quot; x=&quot;225&quot; y=&quot;1574&quot;&gt;🗑 🟢 🟢&lt;/text&gt;
+    &lt;text class=&quot;g&quot; x=&quot;225&quot; y=&quot;1600&quot;&gt;🗑 🟡 🟡&lt;/text&gt;
+    &lt;text class=&quot;g&quot; x=&quot;225&quot; y=&quot;1626&quot;&gt;🗑 🟧 🟧&lt;/text&gt;
+    &lt;text class=&quot;g&quot; x=&quot;225&quot; y=&quot;1652&quot;&gt;🗑 🔶 🔶&lt;/text&gt;
+    &lt;text class=&quot;g&quot; x=&quot;225&quot; y=&quot;1678&quot;&gt;🗑 🔒 🔒&lt;/text&gt;
+    &lt;text class=&quot;g&quot; x=&quot;225&quot; y=&quot;1704&quot;&gt;🗑 🟠 🟠&lt;/text&gt;
+    &lt;text class=&quot;g&quot; x=&quot;225&quot; y=&quot;1730&quot;&gt;🗑 🟫 🟫&lt;/text&gt;
+    &lt;text class=&quot;g&quot; x=&quot;225&quot; y=&quot;1756&quot;&gt;🗑 ▣ ▣&lt;/text&gt;
+    &lt;text class=&quot;g&quot; x=&quot;225&quot; y=&quot;1782&quot;&gt;🗑 ◈ ◈&lt;/text&gt;
+  &lt;/rect&gt;
+
+  &lt;!-- mov %rsp,%rdi ; movslq %eax,%rsi : the syscall number as an argument --&gt;
+  &lt;rect id=&quot;b11&quot; x=&quot;60&quot; y=&quot;1424&quot; width=&quot;330&quot; height=&quot;46&quot; rx=&quot;6&quot; data-next=&quot;b12&quot;&gt;
+    &lt;text class=&quot;g&quot; x=&quot;225&quot; y=&quot;1454&quot;&gt;🛡 🔑 🧱&lt;/text&gt;
+  &lt;/rect&gt;
+
+  &lt;rect id=&quot;b12&quot; x=&quot;60&quot; y=&quot;1490&quot; width=&quot;330&quot; height=&quot;46&quot; rx=&quot;6&quot; data-next=&quot;b13&quot;&gt;
+    &lt;text class=&quot;g&quot; x=&quot;225&quot; y=&quot;1520&quot;&gt;🛡 ⭐ 🔺&lt;/text&gt;
+  &lt;/rect&gt;
+
+  &lt;!-- IBRS_ENTER / UNTRAIN_RET / CLEAR_BRANCH_HISTORY: no architectural effect
+       on the traced path, so they collapse to one box here. --&gt;
+  &lt;rect id=&quot;b13&quot; x=&quot;60&quot; y=&quot;1556&quot; width=&quot;330&quot; height=&quot;46&quot; rx=&quot;6&quot; data-next=&quot;b14&quot;&gt;
+    &lt;text class=&quot;g&quot; x=&quot;225&quot; y=&quot;1586&quot;&gt;🛐&lt;/text&gt;
+  &lt;/rect&gt;
+
+  &lt;!-- call do_syscall_64 : the kernel proper starts here.
+       A call names a shape, exactly as the edges do — so the operand is a
+       shape id, the same plumbing the flow already uses, not a lettered
+       symbol in the program. --&gt;
+  &lt;rect id=&quot;b14&quot; x=&quot;60&quot; y=&quot;1622&quot; width=&quot;330&quot; height=&quot;46&quot; rx=&quot;6&quot; data-next=&quot;b15&quot;&gt;
+    &lt;text class=&quot;g&quot; x=&quot;225&quot; y=&quot;1652&quot;&gt;📞 @b15&lt;/text&gt;
+  &lt;/rect&gt;
+
+  &lt;!-- the callee: everything do_syscall_64 does --&gt;
+  &lt;rect id=&quot;b15&quot; x=&quot;60&quot; y=&quot;1688&quot; width=&quot;330&quot; height=&quot;70&quot; rx=&quot;6&quot; data-next=&quot;b16&quot;&gt;
+    &lt;text class=&quot;g&quot; x=&quot;225&quot; y=&quot;1718&quot;&gt;🤖 🔷 🔷&lt;/text&gt;
+  &lt;/rect&gt;
+
+  &lt;!-- The decision: can we return with SYSRET, or must we take the slow path?
+       This is the Xen PV alternative in the kernel. --&gt;
+  &lt;polygon id=&quot;b16&quot; points=&quot;225,1814 390,1864 225,1914 60,1864&quot;
+           data-lt=&quot;b18&quot; data-eq=&quot;b17&quot; data-gt=&quot;b18&quot;&gt;
+    &lt;text class=&quot;g&quot; x=&quot;225&quot; y=&quot;1872&quot;&gt;🤖 🔷 🔷&lt;/text&gt;
+  &lt;/polygon&gt;
+
+  &lt;!-- the winning path: pop the registers back and return to userspace --&gt;
+  &lt;rect id=&quot;b17&quot; x=&quot;450&quot; y=&quot;1841&quot; width=&quot;300&quot; height=&quot;46&quot; rx=&quot;6&quot; data-next=&quot;b21&quot;&gt;
+    &lt;text class=&quot;g&quot; x=&quot;600&quot; y=&quot;1871&quot;&gt;📤 ◈&lt;/text&gt;
+  &lt;/rect&gt;
+
+  &lt;!-- the slow path: swapgs back, restore the stack, iretq --&gt;
+  &lt;rect id=&quot;b18&quot; x=&quot;60&quot; y=&quot;1974&quot; width=&quot;330&quot; height=&quot;46&quot; rx=&quot;6&quot; data-next=&quot;b19&quot;&gt;
+    &lt;text class=&quot;g&quot; x=&quot;225&quot; y=&quot;2004&quot;&gt;🔄&lt;/text&gt;
+  &lt;/rect&gt;
+
+  &lt;rect id=&quot;b19&quot; x=&quot;60&quot; y=&quot;2040&quot; width=&quot;330&quot; height=&quot;46&quot; rx=&quot;6&quot; data-next=&quot;b20&quot;&gt;
+    &lt;text class=&quot;g&quot; x=&quot;225&quot; y=&quot;2070&quot;&gt;📤 🧱&lt;/text&gt;
+  &lt;/rect&gt;
+
+  &lt;rect id=&quot;b20&quot; x=&quot;60&quot; y=&quot;2106&quot; width=&quot;330&quot; height=&quot;46&quot; rx=&quot;6&quot; data-next=&quot;b21&quot;&gt;
+    &lt;text class=&quot;g&quot; x=&quot;225&quot; y=&quot;2136&quot;&gt;🛑&lt;/text&gt;
+  &lt;/rect&gt;
+
+  &lt;!-- both paths rejoin here: we are back in userspace --&gt;
+  &lt;rect id=&quot;b21&quot; x=&quot;255&quot; y=&quot;2214&quot; width=&quot;300&quot; height=&quot;46&quot; rx=&quot;6&quot; data-next=&quot;b22&quot;&gt;
+    &lt;text class=&quot;g&quot; x=&quot;405&quot; y=&quot;2244&quot;&gt;🚀&lt;/text&gt;
+  &lt;/rect&gt;
+
+  &lt;rect id=&quot;b22&quot; x=&quot;255&quot; y=&quot;2280&quot; width=&quot;300&quot; height=&quot;46&quot; rx=&quot;6&quot; data-next=&quot;b22&quot;&gt;
+    &lt;text class=&quot;g&quot; x=&quot;405&quot; y=&quot;2310&quot;&gt;🚪&lt;/text&gt;
+  &lt;/rect&gt;
+&lt;/svg&gt;</pre></details>
+<p class="dim">95 instructions emitted:</p>
+<pre class="asm">_start:
+jmp	.Lb01
+swapgs
+jmp	.Lb02
+movq	0xffffffff8160c014(%rip), %rsp
+jmp	.Lb03
+movq	0xffffffff816ba710(%rip), %rsp
+jmp	.Lb04
+pushq	$0x2b
+jmp	.Lb05
+push	0xffffffff8160c014(%rip)
+jmp	.Lb06
+push	%r11
+jmp	.Lb07
+pushq	$0x33
+jmp	.Lb08
+push	%rcx
+jmp	.Lb09
+push	%rax
+jmp	.Lb10
+push	%rdi
+push	%rsi
+push	%rdx
+push	%rcx
+pushq	$0xffffffffffffffda
+push	%r8
+push	%r9
+push	%r10
+push	%r11
+push	%rbx
+push	%rbp
+push	%r12
+push	%r13
+push	%r14
+push	%r15
+xorq	%rsi, %rsi
+xorq	%rdx, %rdx
+xorq	%rcx, %rcx
+xorq	%r8, %r8
+xorq	%r9, %r9
+xorq	%r10, %r10
+xorq	%r11, %r11
+xorq	%rbx, %rbx
+xorq	%rbp, %rbp
+xorq	%r12, %r12
+xorq	%r13, %r13
+xorq	%r14, %r14
+xorq	%r15, %r15
+jmp	.Lb11
+movq	%rsp, %rdi
+jmp	.Lb12
+movq	%rax, %rsi
+jmp	.Lb13
+nop
+jmp	.Lb14
+call	.Lb15
+jmp	.Lb15
+cmpq	%rcx, %rcx
+jmp	.Lb16
+cmpq	%rcx, %rcx
+jl	.Lb16_lt
+je	.Lb16_eq
+jg	.Lb16_gt
+jmp	.Lb18
+jmp	.Lb17
+jmp	.Lb18
+pop	%r15
+jmp	.Lb21
+swapgs
+jmp	.Lb19
+pop	%rsp
+jmp	.Lb20
+iretq
+jmp	.Lb21
+sysretq
+jmp	.Lb22
+jmp	.Lb22
+pushq	%rax
+pushq	%rcx
+pushq	%rdx
+pushq	%rsi
+pushq	%rdi
+pushq	%r8
+pushq	%r9
+pushq	%r10
+pushq	%r11
+popq	%r11
+popq	%r10
+popq	%r9
+popq	%r8
+popq	%rdi
+popq	%rsi
+popq	%rdx
+popq	%rcx
+popq	%rax</pre>
+</section>
+
+<footer>
+<p>Compiled by <code>fsvgc.py</code>, assembled with GNU <code>as</code>.
+Against the real Linux <code>entry_SYSCALL_64</code> instruction trace:
+<strong>37/41 instructions match exactly</strong>, 38/41 match as opcodes.
+The four remaining differences are named in <code>SPEC.md</code>, not hidden.</p>
+<p><a href="https://github.com/ArslanCS1993/fsvg">github.com/ArslanCS1993/fsvg</a></p>
+</footer>
+
+</main></body></html>
