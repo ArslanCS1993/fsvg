@@ -64,10 +64,10 @@ footer { margin-top:60px; padding-top:20px; border-top:1px solid var(--line);
 There are no letters in a program &mdash; every instruction is drawn.</p>
 
 <div class="cards">
-  <div class="card"><b>11</b><span>instructions</span></div>
+  <div class="card"><b>12</b><span>instructions</span></div>
   <div class="card"><b>15</b><span>registers</span></div>
-  <div class="card"><b>26</b><span>glyphs, all unique</span></div>
-  <div class="card"><b>847</b><span>lines of compiler</span></div>
+  <div class="card"><b>27</b><span>glyphs, all unique</span></div>
+  <div class="card"><b>956</b><span>lines of compiler</span></div>
 </div>
 
 <p>An instruction is written as an emoji and drawn as an SVG icon. Both are
@@ -88,6 +88,7 @@ colour-blind reader and would vanish on a monochrome printer.
 <tr><th></th><th></th><th>compiles to</th><th>takes</th></tr>
 <tr><td class="glyph">🔄</td><td class="draw"><svg class="ico" viewBox="0 0 24 24" width="34" height="34" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.7M20 4v4h-4" fill="none" stroke="currentColor" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round"/></svg></td><td><code>swapgs</code></td><td class="dim">no operand</td></tr>
 <tr><td class="glyph">🛡</td><td class="draw"><svg class="ico" viewBox="0 0 24 24" width="34" height="34" aria-hidden="true"><path d="M3 12h13M13 8l5 4-5 4" fill="none" stroke="currentColor" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round"/></svg></td><td><code>mov</code></td><td class="dim">2 operands</td></tr>
+<tr><td class="glyph">⏫</td><td class="draw"><svg class="ico" viewBox="0 0 24 24" width="34" height="34" aria-hidden="true"><path d="M4 17h4M4 20h9M6 15V6M3 9l3-3 3 3" fill="none" stroke="currentColor" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round"/></svg></td><td><code>movsxd</code></td><td class="dim">2 operands</td></tr>
 <tr><td class="glyph">📥</td><td class="draw"><svg class="ico" viewBox="0 0 24 24" width="34" height="34" aria-hidden="true"><path d="M12 3v11M8 10l4 4 4-4M4 20h16" fill="none" stroke="currentColor" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round"/></svg></td><td><code>push</code></td><td class="dim">1 operand</td></tr>
 <tr><td class="glyph">📤</td><td class="draw"><svg class="ico" viewBox="0 0 24 24" width="34" height="34" aria-hidden="true"><path d="M12 14V3M8 7l4-4 4 4M4 20h16" fill="none" stroke="currentColor" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round"/></svg></td><td><code>pop</code></td><td class="dim">1 operand</td></tr>
 <tr><td class="glyph">🗑</td><td class="draw"><svg class="ico" viewBox="0 0 24 24" width="34" height="34" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" fill="none" stroke="currentColor" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round"/></svg></td><td><code>xor</code></td><td class="dim">2 operands</td></tr>
@@ -355,7 +356,7 @@ popq	%rax</pre>
 <section class="prog">
 <h3>Kernel entry: entry_SYSCALL_64 <span class="dim">03-entry-syscall</span></h3>
 <p>The first instructions a Linux kernel runs on a syscall. Real swapgs, real push, real sysret. Compiles and matches the kernel instruction trace -- but cannot run as a userspace program, because swapgs is privileged and faults immediately in ring 3.</p>
-<details><summary>the program (155 lines, no letters)</summary><pre class="src">&lt;!--
+<details><summary>the program (161 lines, no letters)</summary><pre class="src">&lt;!--
   entry_SYSCALL_64, in FSVG, with no letters in the program.
 
   Every instruction is one emoji; every register is one emoji. The only letters
@@ -369,7 +370,13 @@ popq	%rax</pre>
   Compiled with the use-r11 flag: the SYSCALL instruction leaves RFLAGS in R11, so the
   CPU chose that register and the program gets to own it.
 --&gt;
-&lt;svg xmlns=&quot;http://www.w3.org/2000/svg&quot; viewBox=&quot;0 0 760 2350&quot; data-name=&quot;entry_SYSCALL_64&quot;&gt;
+&lt;svg xmlns=&quot;http://www.w3.org/2000/svg&quot; viewBox=&quot;0 0 760 2350&quot; data-name=&quot;entry_SYSCALL_64&quot;
+     data-extern=&quot;do_syscall_64&quot;&gt;&lt;!--
+     data-extern: the one symbol this program CALLs but does not define. It
+     lives in another kernel file, so the call is emitted against the real
+     symbol name rather than against a block inside this program. Declaring it
+     is what keeps &quot;undefined symbol&quot; from meaning &quot;you misspelled a shape id&quot;.
+--&gt;
 
   &lt;!-- swapgs : the very first instruction of the kernel on a syscall --&gt;
   &lt;rect id=&quot;b01&quot; x=&quot;60&quot; y=&quot;30&quot; width=&quot;300&quot; height=&quot;46&quot; rx=&quot;6&quot; data-entry=&quot;1&quot; data-next=&quot;b02&quot;&gt;
@@ -378,7 +385,7 @@ popq	%rax</pre>
 
   &lt;!-- mov %rsp, TSS_sp2 : park the user stack pointer in per-CPU scratch --&gt;
   &lt;rect id=&quot;b02&quot; x=&quot;60&quot; y=&quot;96&quot; width=&quot;300&quot; height=&quot;46&quot; rx=&quot;6&quot; data-next=&quot;b03&quot;&gt;
-    &lt;text class=&quot;g&quot; x=&quot;210&quot; y=&quot;126&quot;&gt;🛡 🧱 @0xffffffff8160c014&lt;/text&gt;
+    &lt;text class=&quot;g&quot; x=&quot;210&quot; y=&quot;126&quot;&gt;🛡 @0xffffffff8160c014 🧱&lt;/text&gt;
   &lt;/rect&gt;
 
   &lt;!-- mov pcpu_hot+X86_top_of_stack, %rsp : switch to the kernel stack --&gt;
@@ -454,7 +461,7 @@ popq	%rax</pre>
   &lt;/rect&gt;
 
   &lt;rect id=&quot;b12&quot; x=&quot;60&quot; y=&quot;1490&quot; width=&quot;330&quot; height=&quot;46&quot; rx=&quot;6&quot; data-next=&quot;b13&quot;&gt;
-    &lt;text class=&quot;g&quot; x=&quot;225&quot; y=&quot;1520&quot;&gt;🛡 ⭐ 🔺&lt;/text&gt;
+    &lt;text class=&quot;g&quot; x=&quot;225&quot; y=&quot;1520&quot;&gt;⏫ ⭐ 🔺&lt;/text&gt;
   &lt;/rect&gt;
 
   &lt;!-- IBRS_ENTER / UNTRAIN_RET / CLEAR_BRANCH_HISTORY: no architectural effect
@@ -468,7 +475,7 @@ popq	%rax</pre>
        shape id, the same plumbing the flow already uses, not a lettered
        symbol in the program. --&gt;
   &lt;rect id=&quot;b14&quot; x=&quot;60&quot; y=&quot;1622&quot; width=&quot;330&quot; height=&quot;46&quot; rx=&quot;6&quot; data-next=&quot;b15&quot;&gt;
-    &lt;text class=&quot;g&quot; x=&quot;225&quot; y=&quot;1652&quot;&gt;📞 @b15&lt;/text&gt;
+    &lt;text class=&quot;g&quot; x=&quot;225&quot; y=&quot;1652&quot;&gt;📞 @do_syscall_64&lt;/text&gt;
   &lt;/rect&gt;
 
   &lt;!-- the callee: everything do_syscall_64 does --&gt;
@@ -515,7 +522,7 @@ popq	%rax</pre>
 jmp	.Lb01
 swapgs
 jmp	.Lb02
-movq	0xffffffff8160c014(%rip), %rsp
+movq	%rsp, 0xffffffff8160c014(%rip)
 jmp	.Lb03
 movq	0xffffffff816ba710(%rip), %rsp
 jmp	.Lb04
@@ -562,11 +569,11 @@ xorq	%r15, %r15
 jmp	.Lb11
 movq	%rsp, %rdi
 jmp	.Lb12
-movq	%rax, %rsi
+movslq	%eax, %rsi
 jmp	.Lb13
 nop
 jmp	.Lb14
-call	.Lb15
+call	do_syscall_64
 jmp	.Lb15
 cmpq	%rcx, %rcx
 jmp	.Lb16
@@ -610,9 +617,10 @@ popq	%rax</pre>
 
 <footer>
 <p>Compiled by <code>fsvgc.py</code>, assembled with GNU <code>as</code>.
-Against the real Linux <code>entry_SYSCALL_64</code> instruction trace:
-<strong>37/41 instructions match exactly</strong>, 38/41 match as opcodes.
-The four remaining differences are named in <code>SPEC.md</code>, not hidden.</p>
+Against a recorded trace of the real Linux <code>entry_SYSCALL_64</code>:
+<strong>40 of 40 instructions match exactly</strong> (opcode and operands), checked at build time. The fixture is <code>tools/trace-entry_64.json</code>; the numbers
+above are read from the verifier's own output at build time, not written here by
+hand.</p>
 <p><a href="https://github.com/ArslanCS1993/fsvg">github.com/ArslanCS1993/fsvg</a></p>
 </footer>
 

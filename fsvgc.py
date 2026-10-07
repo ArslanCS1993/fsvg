@@ -64,11 +64,18 @@ ARITY = {"MOV": 2, "ADD": 2, "SUB": 2, "AND": 2, "OR": 2, "XOR": 2,
          # privileged one (SWAPGS) faults in ring 3 -- that is a property of
          # the CPU, not of the compiler.
          "PUSH": 1, "POP": 1, "SWAPGS": 0, "SYSRET": 0, "IRET": 0,
-         "CALL": 1, "CMP": 2, "NOP": 0, "TO_USER": 0}
+         "CALL": 1, "CMP": 2, "NOP": 0, "TO_USER": 0,
+         # Sign-extend a 32-bit view into a 64-bit register. Not sugar for MOV:
+         # `movslq %eax, %rsi` is what the kernel writes where the syscall number
+         # (a signed int in the ABI) becomes a 64-bit argument. Without it the
+         # only available form is `mov %rax,%rsi` -- same register, same value,
+         # DIFFERENT INSTRUCTION, and the trace says so.
+         "MOVSXD": 2}
 
 # ops whose FIRST operand is a destination register (STORE/FILL take memory
 # first, PRINT/PUTINT/EXIT take a name or a value)
-REGDST = {"MOV", "ADD", "SUB", "AND", "OR", "XOR", "MUL", "DIV", "SHL", "SHR"} | \
+REGDST = {"MOV", "ADD", "SUB", "AND", "OR", "XOR", "MUL", "DIV", "SHL", "SHR",
+          "MOVSXD"} | \
          {"LOAD." + x for x in ("B", "SB", "W", "D", "Q")}
 
 
@@ -216,6 +223,13 @@ def load(path):
     bss = parse_pairs(root.get("data-bss"), "bss")
     strs = parse_pairs(root.get("data-str"), "str", sep=";")
 
+    # data-extern="do_syscall_64" - symbols this program CALLs but does not
+    # define, because they live in another kernel file. Declaring them is what
+    # lets CALL tell an external function from a typo'd shape id: without the
+    # declaration an unknown name would silently become an undefined symbol.
+    externs = set(x.strip() for x in (root.get("data-extern") or "").split(",")
+                  if x.strip())
+
     # data-bytes="NAME=1,2,3" - a table. Parsed as a list, not the flat string
     # parse_pairs returns, because a byte table's VALUE is a comma list and the
     # two would otherwise collide.
@@ -297,7 +311,7 @@ def load(path):
                                       else "data-next"))
             if tgt not in shapes:
                 raise CompileError("%s: successor %r does not exist" % (s.id, tgt))
-    return consts, bss, strs, byte_tables, shapes, order, entry[0]
+    return consts, bss, strs, byte_tables, shapes, order, entry[0], externs
 
 
 # ------------------------------------------------------------ operand checking
@@ -325,6 +339,21 @@ def reg_of(t, sid):
     return t.lower()
 
 
+# The 32-bit view of each classic register. r8-r15 follow a rule instead of a
+# table (r8 -> r8d), so both are handled here rather than duplicated.
+_REG32 = {"rax": "eax", "rbx": "ebx", "rcx": "ecx", "rdx": "edx",
+          "rsi": "esi", "rdi": "edi", "rbp": "ebp", "rsp": "esp"}
+
+
+def reg32(r, sid="?"):
+    """64-bit register name -> its 32-bit view. `movslq` needs %eax, not %rax."""
+    if r in _REG32:
+        return _REG32[r]
+    if re.fullmatch(r"r(?:[89]|1[0-5])", r):
+        return r + "d"
+    raise CompileError("%s: %r has no 32-bit view to sign-extend from" % (sid, r))
+
+
 def value_of(t, consts, sid, addr_ok=False, allow_bare=False):
     """Return ('reg', name) or ('imm', int) for a plain value operand."""
     if t.upper() in REGS:
@@ -350,10 +379,13 @@ def shapes_of(s, env):
 class Env:
     """The program's symbol tables: named constants, buffers, byte tables."""
 
-    def __init__(self, consts, bss, bytes_, shape_ids=()):
+    def __init__(self, consts, bss, bytes_, shape_ids=(), externs=()):
         self.consts, self.bss, self.bytes = consts, bss, bytes_
         # shape ids, so CALL can check its target names a real shape
         self.shape_ids = set(shape_ids)
+        # symbols defined in another kernel file, so CALL can emit a real
+        # external call instead of refusing the name
+        self.externs = set(externs)
 
 
 def mem_of(t, env, sid):
@@ -586,9 +618,36 @@ def compile_shape(s, env, strs, out, stmt=None, label=None):
     # Only these ops take a destination REGISTER first. STORE and FILL take a
     # memory reference first, and PRINT/PUTINT/EXIT take a name or a value, so
     # calling reg_of(args[0]) unconditionally rejected every one of them.
-    d = reg_of(args[0], sid) if op in REGDST else None
+    # A MOV whose DESTINATION is memory is a STORE. This is not a convenience:
+    # `movq %rsp, PER_CPU_VAR(cpu_tss_rw + TSS_sp2)` (save the user stack) and
+    # `movq PER_CPU_VAR(pcpu_hot + X86_top_of_stack), %rsp` (load the kernel
+    # stack) are opposite directions, and they are the first two real
+    # instructions the kernel runs after swapgs. With MOV only able to load, the
+    # program could express the second and not the first, and the trace showed
+    # it as one instruction out of place rather than as a missing capability.
+    mov_store = (op == "MOV" and args[0].startswith("@"))
+    d = reg_of(args[0], sid) if (op in REGDST and not mov_store) else None
 
-    if op in ("MOV", "ADD", "SUB", "AND", "OR", "XOR"):
+    if mov_store:
+        # Only the register form is meaningful here. Storing a constant to
+        # memory is what FILL is for, and allowing both would make `MOV @mem, 5`
+        # mean something the number rule says cannot be written anyway.
+        mem = mem_operand(args[0], env, sid)
+        src = reg_of(args[1], sid)
+        out.append("\tmovq\t%%%s, %s" % (src, mem))
+    elif op == "MOVSXD":
+        # Read at 32 bits, write at 64: `movslq %eax, %rsi`. The source MUST be
+        # named with its 32-bit view (%eax, not %rax) or the assembler rejects
+        # it -- and if it were accepted it would be a different instruction.
+        kind, val = value_of(args[1], consts, sid, addr_ok=True, allow_bare=bare)
+        if kind == "reg":
+            out.append("\tmovslq\t%%%s, %%%s" % (reg32(val, sid), d))
+        else:
+            # A constant is already exactly known, so widening it is a plain
+            # move. emit_imm_to handles the sign correctly, which "$0x%x" does
+            # not: -1 would come out as the nonsense $0x-1.
+            emit_imm_to("%" + d, val, out)
+    elif op in ("MOV", "ADD", "SUB", "AND", "OR", "XOR"):
         src = args[1]
         if src.startswith("@"):
             mem = mem_operand(src, env, sid)
@@ -724,10 +783,27 @@ def compile_shape(s, env, strs, out, stmt=None, label=None):
         # first: the target is a label in this program, not a value, so it must
         # not go through the register/constant/address machinery.
         tgt = args[0]
-        if not (tgt.startswith("@") and tgt[1:] in shapes_of(s, env)):
-            raise CompileError("%s: CALL names a shape, so its operand must be "
-                               "@shapeid - got %r" % (sid, tgt))
-        out.append("\tcall\t.L%s" % tgt[1:])
+        if not tgt.startswith("@"):
+            raise CompileError("%s: CALL names a shape or an extern, so its "
+                               "operand must be @name - got %r" % (sid, tgt))
+        name = tgt[1:]
+        if name in env.externs:
+            # Defined in another kernel file. Emit a real call to that symbol,
+            # NOT a jump to a local block, because the callee's name is the only
+            # thing about a call site that can be checked at all: the address is
+            # a link-time accident, but "we called do_syscall_64" is a fact about
+            # the program. The name is preserved into the disassembly so
+            # verify-trace can compare it against the real trace.
+            out.append("\tcall\t%s" % name)
+        elif name in shapes_of(s, env):
+            out.append("\tcall\t.L%s" % name)
+        else:
+            # Deliberately an error. An unknown name that silently became an
+            # external symbol would turn a typo'd shape id into an undefined
+            # reference, and the linker's complaint would point at the symbol
+            # table rather than at the shape that was misspelled.
+            raise CompileError("%s: CALL @%s is neither a shape in this program "
+                               "nor listed in data-extern" % (sid, name))
     s.op = op
 
 
@@ -794,7 +870,29 @@ def esc_asm(t):
     return t.replace("\\", "\\\\").replace('"', '\\"')
 
 
-def link(asm_text, out, keep_asm=None):
+def external_stub(names):
+    """A stub object defining symbols the program calls but does not own.
+
+    The kernel fragment calls do_syscall_64, which lives in a different file we
+    have not translated. The linker needs *something* with that name, and the
+    reason to give it one is narrow and worth stating: it makes the symbol appear
+    in the disassembly as `call <do_syscall_64>`, which is the only part of a
+    call site a trace can actually verify.
+
+    The bodies are `ret` and are never executed -- this program cannot run
+    (swapgs faults in ring 3) and is only disassembled. So the stub changes no
+    behaviour and is not a claim about the kernel; it exists so the name survives
+    linking. Anything that did run this code would be running a lie, so nothing
+    does.
+    """
+    lines = ["\t.text"]
+    for n in sorted(names):
+        lines += ["\t.globl\t%s" % n, "\t.type\t%s, @function" % n,
+                  "%s:" % n, "\tret"]
+    return "\n".join(lines) + "\n"
+
+
+def link(asm_text, out, keep_asm=None, externs=()):
     d = tempfile.mkdtemp(prefix="fsvg-")
     s_path, o_path = os.path.join(d, "p.s"), os.path.join(d, "p.o")
     open(s_path, "w").write(asm_text)
@@ -802,7 +900,16 @@ def link(asm_text, out, keep_asm=None):
                        capture_output=True, text=True)
     if r.returncode:
         raise CompileError("assembler rejected the generated code:\n" + r.stderr[:2000])
-    r = subprocess.run(["ld", "-o", out, "-e", "_start", "--build-id=none", o_path],
+    objs = [o_path]
+    if externs:
+        e_s, e_o = os.path.join(d, "extern.s"), os.path.join(d, "extern.o")
+        open(e_s, "w").write(external_stub(externs))
+        r = subprocess.run(["as", "--64", "-o", e_o, e_s],
+                           capture_output=True, text=True)
+        if r.returncode:
+            raise CompileError("assembler rejected the extern stubs:\n" + r.stderr[:2000])
+        objs.append(e_o)
+    r = subprocess.run(["ld", "-o", out, "-e", "_start", "--build-id=none"] + objs,
                        capture_output=True, text=True)
     if r.returncode:
         raise CompileError("link failed:\n" + r.stderr[:2000])
@@ -828,11 +935,13 @@ def main():
         icons.REGS["r11"] = dict(emoji='\U0001F7E7', hue='warm',
                                  out='M4 4h16v16H4zM8 8h8v8H8z')
     try:
-        consts, bss, strs, byte_tables, shapes, order, entry = load(args.source)
-        env = Env(consts, bss, byte_tables, shapes.keys())
+        (consts, bss, strs, byte_tables, shapes, order, entry,
+         externs) = load(args.source)
+        env = Env(consts, bss, byte_tables, shapes.keys(), externs)
         asm_text = build_asm(env, strs, shapes, order, entry,
                              source_path=os.path.abspath(args.source))
-        link(asm_text, args.out, args.out + ".s" if args.asm else None)
+        link(asm_text, args.out, args.out + ".s" if args.asm else None,
+             externs=externs)
     except CompileError as e:
         sys.exit("fsvgc: %s" % e)
     nstmt = sum(1 for s in shapes.values() if s.kind == "stmt")

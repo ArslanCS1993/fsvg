@@ -35,6 +35,16 @@ OPS = {
         d='M3 12h13M13 8l5 4-5 4',               # arrow into a stop bar
         arity=2, io=1,
         title='mov'),
+    'movsxd': dict(
+        emoji='\u23EB',                          # double up arrow = widen upward
+        # A short bar and a long bar joined by an up arrow: the narrow 32-bit
+        # operand becoming the wide 64-bit one, sign carried up into the top
+        # half. Deliberately not a second arrow -- `mov` already owns one, and
+        # the two must not look interchangeable, because they are not:
+        # `mov %rax,%rsi` and `movslq %eax,%rsi` differ in the trace.
+        d='M4 17h4M4 20h9M6 15V6M3 9l3-3 3 3',
+        arity=2, io=1,
+        title='movsxd'),
     'push': dict(
         emoji='\U0001F4E5',                      # inbox tray = down onto stack
         d='M12 3v11M8 10l4 4 4-4M4 20h16',

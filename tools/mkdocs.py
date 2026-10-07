@@ -80,6 +80,21 @@ def build_asm(src, out):
         return f.read(), None
 
 
+def trace_result():
+    """Scrape the real numbers out of the verifier instead of asserting them.
+
+    The footer used to hardcode "37/41", which is how a page ends up claiming a
+    match the build no longer produces. Reading the verifier's own output means
+    the page cannot state a number the check disagrees with.
+    """
+    r = run([sys.executable, 'tools/verify-trace.py',
+             '--binary', os.path.join(ROOT, 'build', '03-entry-syscall')])
+    m = re.search(r'exact\s*:\s*(\d+)/(\d+)', r.stdout)
+    if not m:
+        return None, None, r.returncode
+    return int(m.group(1)), int(m.group(2)), r.returncode
+
+
 def asm_body(text):
     """Just the program's own instructions.
 
@@ -185,12 +200,21 @@ def program_section():
 
 def main():
     v = icons.vocab()
-    gaps = 4
+    exact, total, rc = trace_result()
+    if exact is None:
+        # Never invent a number. If the verifier cannot run, the page says so.
+        trace_line = ('<strong>the kernel trace check did not run</strong>, '
+                      'so this page makes no claim about how many instructions '
+                      'match')
+    else:
+        trace_line = ('<strong>%d of %d instructions match exactly</strong> '
+                      '(opcode and operands), checked at build time'
+                      % (exact, total))
     doc = TEMPLATE.format(
         ops=v['ops'], regs=v['regs'], total=v['ops'] + v['regs'],
         op_rows=table_of_ops(), reg_rows=table_of_regs(),
         programs=program_section(),
-        traces='38/41', exact='37/41',
+        trace_line=trace_line,
         src_loc=sum(1 for _ in open(os.path.join(ROOT, 'fsvgc.py'),
                                      encoding='utf-8')),
     )
@@ -319,9 +343,10 @@ run; the third is kernel code and cannot.</p>
 
 <footer>
 <p>Compiled by <code>fsvgc.py</code>, assembled with GNU <code>as</code>.
-Against the real Linux <code>entry_SYSCALL_64</code> instruction trace:
-<strong>{exact} instructions match exactly</strong>, {traces} match as opcodes.
-The four remaining differences are named in <code>SPEC.md</code>, not hidden.</p>
+Against a recorded trace of the real Linux <code>entry_SYSCALL_64</code>:
+{trace_line}. The fixture is <code>tools/trace-entry_64.json</code>; the numbers
+above are read from the verifier's own output at build time, not written here by
+hand.</p>
 <p><a href="https://github.com/ArslanCS1993/fsvg">github.com/ArslanCS1993/fsvg</a></p>
 </footer>
 

@@ -112,6 +112,30 @@ import shapes
 for a, b in shapes.compare_all(icons.REGS):
     check(False, "registers %s and %s are not visually distinguishable" % (a, b))
 
+# 8. Instruction icons get the WEAKER check, deliberately.
+#
+# They are mostly open strokes -- `nop` is a single straight line, two points
+# and no silhouette at all -- so the radial-profile metric that registers get
+# does not apply to them: it has nothing to measure, and forcing it would call
+# two different arrows identical. So instead of a test that cannot judge them,
+# they get the one that can, and the limitation is written down rather than
+# papered over with a metric that produces a number regardless.
+#
+# What that check still catches is what actually goes wrong in practice: an icon
+# duplicated outright (r8/r13 were), or one icon built by extending another
+# (rdx sat inside r15). It makes no claim about whether two distinct drawings
+# depict their instructions well -- that is a judgement no test here makes.
+for kind, a, b in shapes.identical_or_nested(icons.OPS, 'd'):
+    check(False, "instruction icons %s and %s are %s" % (a, b, kind.lower()))
+
+# 8b. The load-bearing check for instructions is the EMOJI, not the drawing:
+# the codepoint is what the compiler resolves, so a collision silently compiles
+# to the wrong opcode. Test 1 covers the whole vocabulary; this states why it
+# matters most here.
+for name, spec in icons.OPS.items():
+    check(icons.op_for(spec['emoji']) == name,
+          "instruction %s does not resolve from its own emoji" % name)
+
 if fails:
     print("FAIL (%d)" % len(fails))
     for f in fails:

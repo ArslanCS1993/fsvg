@@ -1,0 +1,215 @@
+{
+ "meta": {
+  "what": "The 41 instructions a real Linux kernel executed on a syscall, restricted to arch/x86/entry/entry_64.S.",
+  "derived_from": "gh-cpu3d's trace of the running kernel (120 steps in total)",
+  "why_subset": "Only this file's instructions are compared, so the subset is equivalent to the full trace for this check.",
+  "source_kernel": "6.8.0 x86_64, CONFIG_DEBUG_INFO=y (DWARF)"
+ },
+ "steps": [
+  {
+   "file": "/tmp/ksrc64/linux-source-6.8.0/arch/x86/entry/entry_64.S",
+   "line": 91,
+   "insn": "=> 0xffffffff81200040 <entry_SYSCALL_64>:\tswapgs"
+  },
+  {
+   "file": "/tmp/ksrc64/linux-source-6.8.0/arch/x86/entry/entry_64.S",
+   "line": 93,
+   "insn": "=> 0xffffffff81200043 <entry_SYSCALL_64+3>:\tmov    %rsp,0xffffffff8160c014"
+  },
+  {
+   "file": "/tmp/ksrc64/linux-source-6.8.0/arch/x86/entry/entry_64.S",
+   "line": 95,
+   "insn": "=> 0xffffffff8120004b <entry_SYSCALL_64+11>:\tmov    0xffffffff816ba710,%rsp"
+  },
+  {
+   "file": "/tmp/ksrc64/linux-source-6.8.0/arch/x86/entry/entry_64.S",
+   "line": 101,
+   "insn": "=> 0xffffffff81200053 <entry_SYSCALL_64+19>:\tpush   $0x2b"
+  },
+  {
+   "file": "/tmp/ksrc64/linux-source-6.8.0/arch/x86/entry/entry_64.S",
+   "line": 102,
+   "insn": "=> 0xffffffff81200055 <entry_SYSCALL_64+21>:\tpush   0xffffffff8160c014"
+  },
+  {
+   "file": "/tmp/ksrc64/linux-source-6.8.0/arch/x86/entry/entry_64.S",
+   "line": 103,
+   "insn": "=> 0xffffffff8120005c <entry_SYSCALL_64+28>:\tpush   %r11"
+  },
+  {
+   "file": "/tmp/ksrc64/linux-source-6.8.0/arch/x86/entry/entry_64.S",
+   "line": 104,
+   "insn": "=> 0xffffffff8120005e <entry_SYSCALL_64+30>:\tpush   $0x33"
+  },
+  {
+   "file": "/tmp/ksrc64/linux-source-6.8.0/arch/x86/entry/entry_64.S",
+   "line": 105,
+   "insn": "=> 0xffffffff81200060 <entry_SYSCALL_64+32>:\tpush   %rcx"
+  },
+  {
+   "file": "/tmp/ksrc64/linux-source-6.8.0/arch/x86/entry/entry_64.S",
+   "line": 107,
+   "insn": "=> 0xffffffff81200061 <entry_SYSCALL_64+33>:\tpush   %rax"
+  },
+  {
+   "file": "/tmp/ksrc64/linux-source-6.8.0/arch/x86/entry/entry_64.S",
+   "line": 109,
+   "insn": "=> 0xffffffff81200062 <entry_SYSCALL_64+34>:\tpush   %rdi"
+  },
+  {
+   "file": "/tmp/ksrc64/linux-source-6.8.0/arch/x86/entry/entry_64.S",
+   "line": 109,
+   "insn": "=> 0xffffffff81200063 <entry_SYSCALL_64+35>:\tpush   %rsi"
+  },
+  {
+   "file": "/tmp/ksrc64/linux-source-6.8.0/arch/x86/entry/entry_64.S",
+   "line": 109,
+   "insn": "=> 0xffffffff81200064 <entry_SYSCALL_64+36>:\tpush   %rdx"
+  },
+  {
+   "file": "/tmp/ksrc64/linux-source-6.8.0/arch/x86/entry/entry_64.S",
+   "line": 109,
+   "insn": "=> 0xffffffff81200065 <entry_SYSCALL_64+37>:\tpush   %rcx"
+  },
+  {
+   "file": "/tmp/ksrc64/linux-source-6.8.0/arch/x86/entry/entry_64.S",
+   "line": 109,
+   "insn": "=> 0xffffffff81200066 <entry_SYSCALL_64+38>:\tpush   $0xffffffffffffffda"
+  },
+  {
+   "file": "/tmp/ksrc64/linux-source-6.8.0/arch/x86/entry/entry_64.S",
+   "line": 109,
+   "insn": "=> 0xffffffff81200068 <entry_SYSCALL_64+40>:\tpush   %r8"
+  },
+  {
+   "file": "/tmp/ksrc64/linux-source-6.8.0/arch/x86/entry/entry_64.S",
+   "line": 109,
+   "insn": "=> 0xffffffff8120006a <entry_SYSCALL_64+42>:\tpush   %r9"
+  },
+  {
+   "file": "/tmp/ksrc64/linux-source-6.8.0/arch/x86/entry/entry_64.S",
+   "line": 109,
+   "insn": "=> 0xffffffff8120006c <entry_SYSCALL_64+44>:\tpush   %r10"
+  },
+  {
+   "file": "/tmp/ksrc64/linux-source-6.8.0/arch/x86/entry/entry_64.S",
+   "line": 109,
+   "insn": "=> 0xffffffff8120006e <entry_SYSCALL_64+46>:\tpush   %r11"
+  },
+  {
+   "file": "/tmp/ksrc64/linux-source-6.8.0/arch/x86/entry/entry_64.S",
+   "line": 109,
+   "insn": "=> 0xffffffff81200070 <entry_SYSCALL_64+48>:\tpush   %rbx"
+  },
+  {
+   "file": "/tmp/ksrc64/linux-source-6.8.0/arch/x86/entry/entry_64.S",
+   "line": 109,
+   "insn": "=> 0xffffffff81200071 <entry_SYSCALL_64+49>:\tpush   %rbp"
+  },
+  {
+   "file": "/tmp/ksrc64/linux-source-6.8.0/arch/x86/entry/entry_64.S",
+   "line": 109,
+   "insn": "=> 0xffffffff81200072 <entry_SYSCALL_64+50>:\tpush   %r12"
+  },
+  {
+   "file": "/tmp/ksrc64/linux-source-6.8.0/arch/x86/entry/entry_64.S",
+   "line": 109,
+   "insn": "=> 0xffffffff81200074 <entry_SYSCALL_64+52>:\tpush   %r13"
+  },
+  {
+   "file": "/tmp/ksrc64/linux-source-6.8.0/arch/x86/entry/entry_64.S",
+   "line": 109,
+   "insn": "=> 0xffffffff81200076 <entry_SYSCALL_64+54>:\tpush   %r14"
+  },
+  {
+   "file": "/tmp/ksrc64/linux-source-6.8.0/arch/x86/entry/entry_64.S",
+   "line": 109,
+   "insn": "=> 0xffffffff81200078 <entry_SYSCALL_64+56>:\tpush   %r15"
+  },
+  {
+   "file": "/tmp/ksrc64/linux-source-6.8.0/arch/x86/entry/entry_64.S",
+   "line": 109,
+   "insn": "=> 0xffffffff8120007a <entry_SYSCALL_64+58>:\txor    %esi,%esi"
+  },
+  {
+   "file": "/tmp/ksrc64/linux-source-6.8.0/arch/x86/entry/entry_64.S",
+   "line": 109,
+   "insn": "=> 0xffffffff8120007c <entry_SYSCALL_64+60>:\txor    %edx,%edx"
+  },
+  {
+   "file": "/tmp/ksrc64/linux-source-6.8.0/arch/x86/entry/entry_64.S",
+   "line": 109,
+   "insn": "=> 0xffffffff8120007e <entry_SYSCALL_64+62>:\txor    %ecx,%ecx"
+  },
+  {
+   "file": "/tmp/ksrc64/linux-source-6.8.0/arch/x86/entry/entry_64.S",
+   "line": 109,
+   "insn": "=> 0xffffffff81200080 <entry_SYSCALL_64+64>:\txor    %r8d,%r8d"
+  },
+  {
+   "file": "/tmp/ksrc64/linux-source-6.8.0/arch/x86/entry/entry_64.S",
+   "line": 109,
+   "insn": "=> 0xffffffff81200083 <entry_SYSCALL_64+67>:\txor    %r9d,%r9d"
+  },
+  {
+   "file": "/tmp/ksrc64/linux-source-6.8.0/arch/x86/entry/entry_64.S",
+   "line": 109,
+   "insn": "=> 0xffffffff81200086 <entry_SYSCALL_64+70>:\txor    %r10d,%r10d"
+  },
+  {
+   "file": "/tmp/ksrc64/linux-source-6.8.0/arch/x86/entry/entry_64.S",
+   "line": 109,
+   "insn": "=> 0xffffffff81200089 <entry_SYSCALL_64+73>:\txor    %r11d,%r11d"
+  },
+  {
+   "file": "/tmp/ksrc64/linux-source-6.8.0/arch/x86/entry/entry_64.S",
+   "line": 109,
+   "insn": "=> 0xffffffff8120008c <entry_SYSCALL_64+76>:\txor    %ebx,%ebx"
+  },
+  {
+   "file": "/tmp/ksrc64/linux-source-6.8.0/arch/x86/entry/entry_64.S",
+   "line": 109,
+   "insn": "=> 0xffffffff8120008e <entry_SYSCALL_64+78>:\txor    %ebp,%ebp"
+  },
+  {
+   "file": "/tmp/ksrc64/linux-source-6.8.0/arch/x86/entry/entry_64.S",
+   "line": 109,
+   "insn": "=> 0xffffffff81200090 <entry_SYSCALL_64+80>:\txor    %r12d,%r12d"
+  },
+  {
+   "file": "/tmp/ksrc64/linux-source-6.8.0/arch/x86/entry/entry_64.S",
+   "line": 109,
+   "insn": "=> 0xffffffff81200093 <entry_SYSCALL_64+83>:\txor    %r13d,%r13d"
+  },
+  {
+   "file": "/tmp/ksrc64/linux-source-6.8.0/arch/x86/entry/entry_64.S",
+   "line": 109,
+   "insn": "=> 0xffffffff81200096 <entry_SYSCALL_64+86>:\txor    %r14d,%r14d"
+  },
+  {
+   "file": "/tmp/ksrc64/linux-source-6.8.0/arch/x86/entry/entry_64.S",
+   "line": 109,
+   "insn": "=> 0xffffffff81200099 <entry_SYSCALL_64+89>:\txor    %r15d,%r15d"
+  },
+  {
+   "file": "/tmp/ksrc64/linux-source-6.8.0/arch/x86/entry/entry_64.S",
+   "line": 112,
+   "insn": "=> 0xffffffff8120009c <entry_SYSCALL_64+92>:\tmov    %rsp,%rdi"
+  },
+  {
+   "file": "/tmp/ksrc64/linux-source-6.8.0/arch/x86/entry/entry_64.S",
+   "line": 114,
+   "insn": "=> 0xffffffff8120009f <entry_SYSCALL_64+95>:\tmovslq %eax,%rsi"
+  },
+  {
+   "file": "/tmp/ksrc64/linux-source-6.8.0/arch/x86/entry/entry_64.S",
+   "line": 114,
+   "insn": "=> 0xffffffff812000a2 <entry_SYSCALL_64+98>:\tnopl   0x0(%rax,%rax,1)"
+  },
+  {
+   "file": "/tmp/ksrc64/linux-source-6.8.0/arch/x86/entry/entry_64.S",
+   "line": 121,
+   "insn": "=> 0xffffffff812000a7 <entry_SYSCALL_64+103>:\tcall   0xffffffff81156a5f <do_syscall_64>"
+  }
+ ]
+}

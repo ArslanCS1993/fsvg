@@ -13,7 +13,13 @@
   Compiled with the use-r11 flag: the SYSCALL instruction leaves RFLAGS in R11, so the
   CPU chose that register and the program gets to own it.
 -->
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 2350" data-name="entry_SYSCALL_64">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 2350" data-name="entry_SYSCALL_64"
+     data-extern="do_syscall_64"><!--
+     data-extern: the one symbol this program CALLs but does not define. It
+     lives in another kernel file, so the call is emitted against the real
+     symbol name rather than against a block inside this program. Declaring it
+     is what keeps "undefined symbol" from meaning "you misspelled a shape id".
+-->
 
   <!-- swapgs : the very first instruction of the kernel on a syscall -->
   <rect id="b01" x="60" y="30" width="300" height="46" rx="6" data-entry="1" data-next="b02">
@@ -22,7 +28,7 @@
 
   <!-- mov %rsp, TSS_sp2 : park the user stack pointer in per-CPU scratch -->
   <rect id="b02" x="60" y="96" width="300" height="46" rx="6" data-next="b03">
-    <text class="g" x="210" y="126">🛡 🧱 @0xffffffff8160c014</text>
+    <text class="g" x="210" y="126">🛡 @0xffffffff8160c014 🧱</text>
   </rect>
 
   <!-- mov pcpu_hot+X86_top_of_stack, %rsp : switch to the kernel stack -->
@@ -98,7 +104,7 @@
   </rect>
 
   <rect id="b12" x="60" y="1490" width="330" height="46" rx="6" data-next="b13">
-    <text class="g" x="225" y="1520">🛡 ⭐ 🔺</text>
+    <text class="g" x="225" y="1520">⏫ ⭐ 🔺</text>
   </rect>
 
   <!-- IBRS_ENTER / UNTRAIN_RET / CLEAR_BRANCH_HISTORY: no architectural effect
@@ -112,7 +118,7 @@
        shape id, the same plumbing the flow already uses, not a lettered
        symbol in the program. -->
   <rect id="b14" x="60" y="1622" width="330" height="46" rx="6" data-next="b15">
-    <text class="g" x="225" y="1652">📞 @b15</text>
+    <text class="g" x="225" y="1652">📞 @do_syscall_64</text>
   </rect>
 
   <!-- the callee: everything do_syscall_64 does -->

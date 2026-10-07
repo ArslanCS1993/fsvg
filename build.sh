@@ -10,6 +10,13 @@ ASMF=0; [[ "${1:-}" == "--asm" ]] && ASMF=1
 mkdir -p build dist
 fail=0
 
+# The glyph vocabulary comes first: everything below compiles against it, and a
+# duplicated emoji or two registers that draw the same outline is a language
+# defect, not a program defect. Checked before compiling so the error names the
+# vocabulary rather than surfacing as a mysterious wrong instruction.
+echo "=== glyphs"
+python3 test-icons.py || { echo "FAIL: glyph vocabulary"; fail=1; }
+
 for src in programs/*.fsvg.svg; do
   name=$(basename "$src" .fsvg.svg)
   echo "=== $name"
@@ -26,7 +33,14 @@ for src in programs/*.fsvg.svg; do
   # userspace process. `swapgs` is privileged and faults immediately in ring 3,
   # so those are checked by comparing against the real instruction trace
   # instead (tools/verify-trace.py). Running them would prove nothing.
-  case "$name" in 03-*) continue;; esac
+  case "$name" in
+    03-*)
+      if ! python3 tools/verify-trace.py --binary "build/$name"; then
+        echo "FAIL $name: does not match the kernel instruction trace"
+        fail=1
+      fi
+      continue;;
+  esac
 
   # The program must print something, and printing must not be the only thing it does.
   if ! ./build/"$name" > "build/$name.svg"; then
@@ -62,6 +76,15 @@ cp -f fsvgc.py svg2png.py SPEC.md dist/
 # appear on the page. It also embeds each program's real assembly, which means
 # it must be regenerated whenever the programs change; putting it here makes
 # that automatic rather than a thing to remember.
+#
+# Only on a green build. Regenerating it after a failure would publish a page
+# built from output that just failed verification -- the failure would be real
+# and the page would still be new, which is the worst of both.
+if (( fail )); then
+  echo
+  echo "BUILD FAILED (site not regenerated)"
+  exit 1
+fi
 echo "=== site"
 python3 tools/mkdocs.py
 
@@ -85,5 +108,4 @@ if git ls-files | grep -qx 'site/index.html'; then
   exit 1
 fi
 echo
-(( fail )) && { echo "BUILD FAILED"; exit 1; }
 echo "OK"

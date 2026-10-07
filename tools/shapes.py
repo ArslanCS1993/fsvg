@@ -100,7 +100,30 @@ def _flatten(d):
             cur = (cur[0], cur[1] + y if cmd == 'v' else y)
             pts.append(cur)
         elif cmd in 'CcSsQqTt':
-            raise ValueError('command %r not used by this table (%r)' % (cmd, d))
+            # Cubic Bezier, sampled. The instruction icons use curves (the call
+            # handset, the sysret rocket) while the register outlines are
+            # polygons, so without this the op icons simply could not be
+            # compared -- and refusing was the right default until something
+            # needed them. Sampled rather than refused now because the check
+            # "does movsxd's icon read as mov's?" has to be answerable.
+            #
+            # One pair of control points per command; the smooth variants (S/T)
+            # and quadratics (Q) are not used and still raise below, so this
+            # cannot silently mis-sample a curve shape it was not written for.
+            if cmd not in 'Cc':
+                raise ValueError('command %r not sampled (%r)' % (cmd, d))
+            p0 = cur
+            x1, y1, x2, y2, x, y = (num() for _ in range(6))
+            if cmd == 'c':
+                x1, y1 = p0[0] + x1, p0[1] + y1
+                x2, y2 = p0[0] + x2, p0[1] + y2
+                x, y = p0[0] + x, p0[1] + y
+            for k in range(1, STEPS_PER_COMMAND + 1):
+                t = k / float(STEPS_PER_COMMAND)
+                u = 1.0 - t
+                pts.append((u*u*u*p0[0] + 3*u*u*t*x1 + 3*u*t*t*x2 + t*t*t*x,
+                            u*u*u*p0[1] + 3*u*u*t*y1 + 3*u*t*t*y2 + t*t*t*y))
+            cur = (x, y)
         elif cmd in 'Aa':
             rx, ry, rot, laf, sf, x, y = (num() for _ in range(7))
             if cmd == 'a':
@@ -180,17 +203,69 @@ def too_similar(d1, d2, tol=TOL):
     return False
 
 
-def compare_all(table):
-    """Every colliding pair in a name -> spec dict. Returns [(a, b), ...]."""
+def compare_all(table, key='out'):
+    """Every colliding pair in a name -> spec dict. Returns [(a, b), ...].
+
+    Only meaningful for CLOSED outlines. The metric asks "would these two
+    silhouettes read as the same figure", which a closed shape has an answer to
+    and an open stroke does not: `nop`'s icon is a single straight line, so it
+    has two points and no silhouette at all. Callers comparing open drawings
+    want `identical_or_nested` instead -- forcing the radial profile onto a line
+    would report two different lines as identical, which is worse than not
+    checking.
+    """
     names = list(table)
     out = []
     for i, a in enumerate(names):
         for b in names[i + 1:]:
+            if not _closed(table[a][key]):
+                raise ValueError(
+                    '%s is an open path, so its silhouette is undefined; '
+                    'compare_all is for closed outlines only' % a)
             try:
-                if too_similar(table[a]['out'], table[b]['out']):
+                if too_similar(table[a][key], table[b][key]):
                     out.append((a, b))
             except ValueError as e:
                 raise ValueError('%s vs %s: %s' % (a, b, e))
+    return out
+
+
+def _closed(d):
+    """Does this path contain a closed contour at all?
+
+    Deliberately not "does it end with z". A register outline may close its main
+    figure and then add an open detail stroke -- rdx is a closed diamond with a
+    cross drawn across it, and its path ends `...v8`, not `z`. Testing the last
+    command called rdx open and refused to compare the register table, which is
+    exactly backwards: rdx is the shape the cross keeps out of r15's diamond.
+    """
+    return bool(re.search(r'[zZ]', d))
+
+
+def identical_or_nested(table, key):
+    """Copy-paste and lazy-variation check, valid for ANY path.
+
+    Weaker than the silhouette test but it applies to open strokes too, and it
+    catches the two failures that actually happen: an icon duplicated outright
+    (r8 and r13 were the same cross) and one icon being a prefix of another (the
+    "filled-in twin"). It makes no claim about depiction -- two arrows pointing
+    opposite ways are correctly left alone here.
+    """
+    def norm(d):
+        return re.sub(r'\s+', '', d)
+
+    out = []
+    names = list(table)
+    for i, a in enumerate(names):
+        for b in names[i + 1:]:
+            da, db = norm(table[a][key]), norm(table[b][key])
+            if da == db:
+                out.append(('SAME PATH', a, b))
+                continue
+            s, l = (da, db) if len(da) < len(db) else (db, da)
+            n = (a, b) if len(da) < len(db) else (b, a)
+            if s in l:
+                out.append(('NESTED', n[0], n[1]))
     return out
 
 

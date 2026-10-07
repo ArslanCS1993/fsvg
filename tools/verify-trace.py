@@ -15,22 +15,32 @@ and compare instruction by instruction against the recorded trace.
 Exit status is the verdict: 0 when every instruction that both sides record
 matches, so build.sh can fail on a regression.
 """
-import argparse, json, re, subprocess, sys
+import argparse, json, os, re, subprocess, sys
 
-DEFAULT_TRACE = '/root/gh-cpu3d/src/trace.json'
+DEFAULT_TRACE = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                             'trace-entry_64.json')
 ENTRY = 'arch/x86/entry/entry_64.S'
 
 
 def real_instructions(trace_path, entry):
     d = json.load(open(trace_path))
     pat = re.compile(r'([0-9a-f]+)\s+<[^>]+>:\s*(.*)$')
-    out = []
+    out, raw = [], 0
     for x in d['steps']:
         if not x['file'].endswith(entry):
             continue
         t = pat.search(x['insn']).group(2).strip().split(None, 1)
-        out.append((x['line'], t[0].lower().rstrip('q'), t[1] if len(t) > 1 else ''))
-    return out
+        raw += 1
+        op = t[0].lower().rstrip('q')
+        arg = t[1] if len(t) > 1 else ''
+        # The same exclusions the FSVG side gets, or the two lists are compared
+        # at different offsets and every instruction after the first nop reads
+        # as a gap. That is exactly what happened: `nop` was filtered on one side
+        # and `nopl` on neither, reporting 39/41 when the truth was 40/41.
+        if op.startswith('nop') or op == 'jmp':
+            continue
+        out.append((x['line'], op, arg))
+    return out, raw
 
 
 def fsvg_instructions(binary):
@@ -45,9 +55,15 @@ def fsvg_instructions(binary):
         if not m:
             continue
         op = m.group(1).lower().rstrip('q')
-        # FSVG puts a jmp after every shape (a shape is a labelled block) and
-        # as/ld inserts alignment nops. Neither is part of the program.
-        if op in ('jmp', 'nop'):
+        # FSVG puts a jmp after every shape (a shape is a labelled block). Not
+        # part of the program.
+        if op == 'jmp':
+            continue
+        # Every nop variant, and this one is not a detail. `nopl` was previously
+        # NOT filtered while `nop` was, which put the two sides one instruction
+        # out of step and produced two phantom gaps (the nopl itself, plus the
+        # `call` it displaced) -- 39/41 when the real state was 40/41.
+        if op.startswith('nop'):
             continue
         out.append((op, m.group(2).split('#')[0].strip()))
     return out
@@ -55,6 +71,22 @@ def fsvg_instructions(binary):
 
 def canon(op, arg):
     a = arg.replace(' ', '').replace('$', '')
+    # A call or jump target. objdump prints the address AND the symbol it lands
+    # on, so the symbol is what identifies the callee -- the address is a
+    # link-time accident. Keep a real function name, but reduce an offset into
+    # an anonymous local label (``_start+0x88``) to LOCAL, so that "we call
+    # do_syscall_64" cannot be satisfied by "we call some address in our own
+    # code". Without this, the one gap that actually carries meaning at the call
+    # site would have been papered over as a match.
+    #
+    # This must come BEFORE the 16-digit address rule below. A kernel address is
+    # a full 16 hex digits, so that rule rewrites ``0xffffffff81156a5f`` to
+    # ``IMM64`` first and leaves ``IMM64<do_syscall_64>``, which no longer looks
+    # like an address-with-symbol and would silently skip this branch.
+    m = re.match(r'^(?:0x)?[0-9a-f]*<([^>]+)>$', a)
+    if m:
+        sym = m.group(1)
+        return op, ('LOCAL' if '+' in sym else sym)
     a = re.sub(r'0x[0-9a-f]{16}', 'IMM64', a)
     # The kernel's zeroing idiom writes 32-bit views (xor %r15d,%r15d, xorl
     # %esi,%esi); FSVG has one width per register and writes %r15 / %rsi. Both
@@ -85,7 +117,7 @@ def main():
     ap.add_argument('--verbose', action='store_true')
     a = ap.parse_args()
 
-    real = real_instructions(a.trace, a.entry)
+    real, raw = real_instructions(a.trace, a.entry)
     mine = fsvg_instructions(a.binary)
     n = min(len(real), len(mine))
 
@@ -103,7 +135,8 @@ def main():
         else:
             mism.append((i, real[i][0], r, m, 'opcode'))
 
-    print("real trace : %d instructions" % len(real))
+    print("real trace : %d instructions (%d after excluding nop/jmp)"
+          % (raw, len(real)))
     print("fsvg output: %d instructions" % len(mine))
     print("opcodes    : %d/%d (%.0f%%)" % (op_ok, n, 100.0 * op_ok / max(n, 1)))
     print("exact      : %d/%d (%.0f%%)" % (exact, n, 100.0 * exact / max(n, 1)))
